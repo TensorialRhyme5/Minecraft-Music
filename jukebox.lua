@@ -737,11 +737,19 @@ local BPM_THEMES = {
   { math.huge, "hype" },
 }
 local THEME_FOR = {}     -- optional per-playlist override, e.g. THEME_FOR["Chill Vibes 2.0"] = "chill"
+local THEME_CAP = {      -- highest background a playlist's songs may use (by BPM order above)
+  ["Chill Vibes 2.0"] = "waves",
+}
 theme = function()
   local name = _G.__THEME
-  if not name and S.pl and S.lists then name = THEME_FOR[S.lists[S.pl].name] end
+  local pl = S.lists and (S.curPl or S.pl) and S.lists[S.curPl or S.pl]
+  if not name and pl then name = THEME_FOR[pl.name] end
   if not name and S.song and S.song.bpm then
-    for _, r in ipairs(BPM_THEMES) do if S.song.bpm < r[1] then name = r[2]; break end end
+    local cap = pl and THEME_CAP[pl.name]
+    for _, r in ipairs(BPM_THEMES) do
+      name = r[2]
+      if S.song.bpm < r[1] or name == cap then break end
+    end
   end
   return THEMES[name or "classic"] or THEMES.classic
 end
