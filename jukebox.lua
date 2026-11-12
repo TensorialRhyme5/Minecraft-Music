@@ -701,7 +701,7 @@ local function mix(c, k)   -- brighten a 0xRRGGBB colour by factor k
   return math.min(255, math.floor(r * k)) * 65536 + math.min(255, math.floor(g * k)) * 256 + math.min(255, math.floor(b * k))
 end
 
-local BG_NP = 1000
+local BG_NP = 500
 local BG_SHAPES = {}
 do
   local PHI = (1 + math.sqrt(5)) / 2
@@ -738,8 +738,8 @@ do
   edgeShape(cube)
   edgeShape({ { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } })
   curveShape(function(n)
-    local ring, k = math.floor(n / 50), n % 50
-    local u, v = ring / 20 * 2 * math.pi, k / 50 * 2 * math.pi
+    local ring, k = math.floor(n / 25), n % 25
+    local u, v = ring / 20 * 2 * math.pi, k / 25 * 2 * math.pi
     return { (0.68 + 0.32 * math.cos(v)) * math.cos(u), 0.32 * math.sin(v), (0.68 + 0.32 * math.cos(v)) * math.sin(u) }
   end)
   local ico = {}
@@ -748,7 +748,7 @@ do
   end end
   edgeShape(ico)
   curveShape(function(n)
-    local ring, a = math.floor(n / 334), (n % 334) / 334 * 2 * math.pi
+    local ring, a = math.floor(n / 167), (n % 167) / 167 * 2 * math.pi
     local c, s2 = math.cos(a), math.sin(a)
     if ring == 0 then return { c, s2, 0 } elseif ring == 1 then return { c, 0, s2 } else return { 0, c, s2 } end
   end)
