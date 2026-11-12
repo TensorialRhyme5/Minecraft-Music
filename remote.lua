@@ -48,16 +48,16 @@ local PAL = {
   [colors.cyan]      = 0x7fc8ff, -- day sky
   [colors.purple]    = 0x0e1a4a, -- night sky
   [colors.orange]    = 0xff8a3d, -- sunrise / sunset
-  [colors.pink]      = 0xd8649a, -- dusk
+  [colors.pink]      = 0x7a4a24, -- brown (wood, dirt, doors)
   [colors.green]     = 0x3f9b2f, -- grass
   [colors.yellow]    = 0xffd23f,
   [colors.red]       = 0xff3b3b,
   [colors.magenta]   = 0xff4fa3,
-  [colors.lime]      = 0x9b5cff, -- purple accent (lime slot reused)
+  [colors.lime]      = 0x2d6e23, -- dark green (hill)
 }
 for c, v in pairs(PAL) do mon.setPaletteColour(c, v) end
 
-local WHITE, ORANGE, MAGENTA, LBLUE, YELLOW, ACCENT, PINK, GRAY, LGRAY = "0", "1", "2", "3", "4", "5", "6", "7", "8"
+local WHITE, ORANGE, MAGENTA, LBLUE, YELLOW, DKGREEN, BROWN, GRAY, LGRAY = "0", "1", "2", "3", "4", "5", "6", "7", "8"
 local DAYSKY, NIGHTSKY, HILITE, PANEL, GRASS, RED, BLACK = "9", "a", "b", "c", "d", "e", "f"
 
 local G_RIGHT, G_LEFT, G_UP, G_DOWN, G_DOT, G_HLINE, G_VLINE = "\16", "\17", "\30", "\31", "\7", "\140", "\149"
@@ -130,11 +130,11 @@ local function computeLayout()
   L.topH = math.max(6, math.floor(H / 3))              -- white + red boxes
   L.wx1, L.wx2 = L.rx1, L.rx1 + math.floor(L.rw * 0.33) - 1   -- white (3D)
   L.cx1, L.cx2 = L.wx2 + 2, L.rx2                              -- red (clock)
-  L.by2 = H - 1; L.by1 = L.by2 - 2                     -- green controls
-  L.npy = L.by1 - 2                                    -- now playing row
-  L.pgy = L.by1 - 1                                    -- progress row
-  L.my1 = L.topH + 1; L.my2 = L.npy - 2                -- pink MC box
-  L.sky1, L.sky2 = L.my1 + 1, L.my2 - 2                -- light blue sky
+  L.by2 = H; L.by1 = H                                 -- green controls (1 row)
+  L.pgy = H - 1                                        -- progress row
+  L.npy = H - 2                                        -- now playing row
+  L.my1 = L.topH + 1; L.my2 = H - 3                    -- pink MC box
+  L.sky1, L.sky2 = L.my1 + 1, L.my2 - 2                -- light blue scene
   L.mdy = L.my2 - 1                                    -- purple digital row
   L.hy2 = 3; L.ly1 = 5; L.fy1 = H - 2; L.ly2 = L.fy1 - 2
   L.rows = L.ly2 - L.ly1 + 1
@@ -534,8 +534,22 @@ local function drawClock()
   text(x1 + 1 + math.floor((iw - #date) / 2), ty + 4, date, LGRAY, PANEL)
 end
 
--- ---------------------------------------------------------- light blue + purple: Minecraft time
-local skyStars = {}
+-- ---------------------------------------------------------- light blue + purple: Minecraft scene + time
+-- Weather needs an Environment Detector (Advanced Peripherals mod) on this computer or the network.
+local weather = { rain = false, thunder = false, known = false, checked = -10 }
+local function updateWeather(t)
+  if t - weather.checked < 3 then return end
+  weather.checked = t
+  local det = peripheral.find("environmentDetector") or peripheral.find("environment_detector")
+  if det then
+    local ok1, r = pcall(det.isRaining)
+    local ok2, th = pcall(det.isThunder)
+    weather.rain, weather.thunder, weather.known = ok1 and r == true, ok2 and th == true, true
+  else
+    weather.rain, weather.thunder, weather.known = false, false, false
+  end
+end
+
 local function mcClock()
   local t = os.time("ingame") % 24
   local h, m = math.floor(t), math.floor((t % 1) * 60)
@@ -543,51 +557,244 @@ local function mcClock()
   return t, string.format("%d:%02d %s", h12, m, h < 12 and "AM" or "PM")
 end
 
+-- Colour pixels -> teletext: every cell shows its two most common colours.
+local function blitColorCanvas(x1, y1, cw, ch, px)
+  for cy = 0, ch - 1 do
+    local r1, r2, r3 = px[cy * 3 + 1], px[cy * 3 + 2], px[cy * 3 + 3]
+    for cx = 0, cw - 1 do
+      local a, b = cx * 2 + 1, cx * 2 + 2
+      local p = { r1[a], r1[b], r2[a], r2[b], r3[a], r3[b] }
+      local cnt, c1, c2 = {}, nil, nil
+      for i = 1, 6 do cnt[p[i]] = (cnt[p[i]] or 0) + 1 end
+      for col, n in pairs(cnt) do
+        if not c1 or n > cnt[c1] then c2 = c1; c1 = col
+        elseif not c2 or n > cnt[c2] then c2 = col end
+      end
+      if not c2 then
+        setCell(x1 + cx, y1 + cy, " ", WHITE, c1)
+      else
+        local bits = 0
+        for i = 1, 6 do if p[i] == c2 then bits = bits + 2 ^ (i - 1) end end
+        if bits >= 32 then setCell(x1 + cx, y1 + cy, string.char(128 + (63 - bits)), c1, c2)
+        else setCell(x1 + cx, y1 + cy, string.char(128 + bits), c2, c1) end
+      end
+    end
+  end
+end
+
+-- sprites face right; "." = transparent
+local SPR = {
+  sheep    = { "00008", "00008", "7..7." },
+  cow      = { "60066", "66606", "6..6." },
+  chicken  = { ".0e", "004", ".4." },
+  shambler = { ".dd", "777", ".7.", "b.b" },
+  skeleton = { ".88", "000", ".8.", "8.8" },
+  spider   = { "f.f.f", ".fffe", "f.f.f" },
+  resident = { ".e.", ".4.", "111", ".1.", "6.6" },  -- original explorer in a red hat
+}
+local DAY_MOBS = { "sheep", "cow", "chicken" }
+local NIGHT_MOBS = { "shambler", "skeleton", "spider" }
+
+local SC = { mobs = {}, nextMob = 0, clouds = nil, drops = nil, stars = nil, bolt = nil, nextBolt = 0, lastT = nil,
+  res = { state = "inside", x = 0, target = 0, wait = 0, face = 1 } }
+
+local function drawScene(t, mc, x1, y1, cw, ch)
+  local PW, PH = cw * 2, ch * 3
+  local dt = SC.lastT and math.min(0.5, t - SC.lastT) or 0
+  SC.lastT = t
+  local px = {}
+  local gy = PH - 2                                    -- top grass row
+  local isNight = mc >= 19 or mc < 5.5
+  local rain, storm = weather.rain or weather.thunder, weather.thunder
+
+  -- sky
+  local top, low
+  if mc >= 6.5 and mc < 17.5 then top, low = DAYSKY, DAYSKY
+  elseif mc >= 4.5 and mc < 6.5 then top, low = NIGHTSKY, ORANGE
+  elseif mc >= 17.5 and mc < 19.5 then top, low = MAGENTA, ORANGE
+  else top, low = NIGHTSKY, NIGHTSKY end
+  if rain and top == DAYSKY then top, low = storm and GRAY or LGRAY, storm and GRAY or LGRAY end
+  local flash = SC.bolt and t < SC.bolt.flash
+  for y = 1, PH do
+    local row = {}
+    local col = flash and WHITE or ((y <= (gy - 1) / 2) and top or low)
+    for x = 1, PW do row[x] = col end
+    px[y] = row
+  end
+  local function put(x, y, c)
+    x, y = math.floor(x + 0.5), math.floor(y + 0.5)
+    if y >= 1 and y <= PH and x >= 1 and x <= PW then px[y][x] = c end
+  end
+  local function rect(xa, ya, xb, yb, c) for y = ya, yb do for x = xa, xb do put(x, y, c) end end end
+  local function sprite(name, x, yBottom, face)
+    local spr = SPR[name]
+    local w = #spr[1]
+    for r = 1, #spr do
+      local row = spr[r]
+      for k = 1, w do
+        local c = row:sub(face > 0 and k or (w - k + 1), face > 0 and k or (w - k + 1))
+        if c ~= "." then put(x + k - 1, yBottom - #spr + r, c) end
+      end
+    end
+  end
+
+  -- stars
+  if not SC.stars then
+    SC.stars = {}
+    for i = 1, 18 do SC.stars[i] = { math.random(1, PW), math.random(1, gy - 8), math.random() * 6 } end
+  end
+  if top == NIGHTSKY and not rain and not flash then
+    for _, s in ipairs(SC.stars) do
+      if math.sin(t * 1.7 + s[3]) > -0.4 then put(s[1], s[2], math.sin(t + s[3]) > 0.3 and WHITE or LGRAY) end
+    end
+  end
+
+  -- sun / moon on an arc
+  local arcH = gy - 6
+  local function body(frac, col, size)
+    local bx = 2 + frac * (PW - 4 - size)
+    local by = gy - 3 - math.sin(frac * math.pi) * arcH
+    rect(bx, by, bx + size - 1, by + size - 1, col)
+  end
+  if not rain then
+    if mc >= 6 and mc < 18 then body((mc - 6) / 12, YELLOW, 4) else body(((mc - 18) % 24) / 12, WHITE, 3) end
+  end
+
+  -- clouds
+  if not SC.clouds then
+    SC.clouds = {}
+    for i = 1, 5 do SC.clouds[i] = { x = math.random(0, PW), y = math.random(2, 7), w = math.random(7, 13), v = 1 + math.random() } end
+  end
+  local cloudCol = storm and PANEL or (rain and GRAY or ((top == NIGHTSKY) and GRAY or WHITE))
+  local nClouds = rain and 5 or 3
+  for i = 1, nClouds do
+    local c = SC.clouds[i]
+    c.x = c.x + c.v * dt
+    if c.x > PW + 2 then c.x = -c.w - math.random(0, 10); c.y = math.random(2, 7) end
+    local cx = math.floor(c.x)
+    rect(cx + 2, c.y, cx + c.w - 3, c.y, cloudCol)
+    rect(cx, c.y + 1, cx + c.w - 1, c.y + 1, cloudCol)
+    rect(cx + 1, c.y + 2, cx + c.w - 2, c.y + 2, cloudCol)
+  end
+
+  -- hill
+  local hcx, hrx, hh = math.floor(PW * 0.76), math.floor(PW * 0.34), math.floor(gy * 0.38)
+  for x = hcx - hrx, hcx + hrx do
+    local f = (x - hcx) / hrx
+    local d = math.floor(hh * math.sqrt(math.max(0, 1 - f * f)) + 0.5)
+    for y = gy - d, gy - 1 do put(x, y, DKGREEN) end
+  end
+
+  -- ground
+  rect(1, gy, PW, gy, GRASS)
+  rect(1, gy + 1, PW, PH, BROWN)
+
+  -- house (stone walls, red roof)
+  local hx = 3
+  local hw = 14
+  rect(hx, gy - 8, hx + hw - 1, gy - 1, LGRAY)
+  for i = 0, 5 do rect(hx - 1 + i, gy - 9 - i, hx + hw - i, gy - 9 - i, RED) end
+  local doorX = hx + 3
+  rect(doorX, gy - 4, doorX + 1, gy - 1, BROWN)
+  local lightOn = mc >= 18 or mc < 6.5 or (storm and SC.res.state == "inside")
+  rect(hx + 8, gy - 6, hx + 10, gy - 5, lightOn and YELLOW or BLACK)
+
+  -- tree
+  local tx = hx + hw + 7
+  rect(tx, gy - 6, tx + 1, gy - 1, BROWN)
+  for y = -5, 4 do for x = -5, 5 do
+    if x * x + (y * 1.3) ^ 2 <= 22 then put(tx + 0.5 + x, gy - 10 + y, GRASS) end
+  end end
+
+  -- resident: out during the day, home at night or when it rains
+  local R = SC.res
+  local wantsOut = mc >= 7 and mc < 18 and not rain
+  if R.state == "inside" and wantsOut then
+    R.state, R.x, R.target, R.wait = "out", doorX, doorX + 6, 0
+  elseif R.state == "out" and not wantsOut then
+    R.state, R.target = "returning", doorX
+  end
+  if R.state ~= "inside" then
+    if math.abs(R.target - R.x) < 0.5 then
+      if R.state == "returning" then R.state = "inside"
+      else
+        R.wait = R.wait - dt
+        if R.wait <= 0 then R.target = math.random(doorX + 4, PW - 6); R.wait = math.random(1, 4) end
+      end
+    else
+      local dir = R.target > R.x and 1 or -1
+      R.face = dir
+      R.x = R.x + dir * math.min(4 * dt, math.abs(R.target - R.x))
+    end
+  end
+
+  -- mobs wander past (animals by day, creatures at night)
+  if t >= SC.nextMob and #SC.mobs < 2 then
+    local pool = isNight and NIGHT_MOBS or DAY_MOBS
+    local dir = math.random(0, 1) == 0 and -1 or 1
+    SC.mobs[#SC.mobs + 1] = { kind = pool[math.random(1, #pool)], dir = dir,
+      x = dir > 0 and -5 or PW + 1, v = 2.5 + math.random() * 3 }
+    SC.nextMob = t + math.random(6, 16)
+  end
+  for i = #SC.mobs, 1, -1 do
+    local m = SC.mobs[i]
+    m.x = m.x + m.dir * m.v * dt
+    if m.x < -8 or m.x > PW + 3 then table.remove(SC.mobs, i)
+    else sprite(m.kind, math.floor(m.x), gy - 1 - ((math.floor(t * 4 + i) % 2 == 0) and 0 or 0), m.dir) end
+  end
+  if R.state ~= "inside" then sprite("resident", math.floor(R.x + 0.5), gy - 1, R.face) end
+
+  -- rain
+  if rain then
+    if not SC.drops then
+      SC.drops = {}
+      for i = 1, 40 do SC.drops[i] = { math.random(1, PW), math.random() * PH } end
+    end
+    for _, d in ipairs(SC.drops) do
+      d[2] = d[2] + 22 * dt
+      d[1] = d[1] - 3 * dt
+      if d[2] > gy then d[2] = math.random() * 4; d[1] = math.random(1, PW + 6) end
+      put(d[1], d[2], LBLUE)
+    end
+  end
+
+  -- lightning
+  if storm and t >= SC.nextBolt then
+    local pts, x = {}, math.random(8, PW - 8)
+    for y = 6, gy - 1 do x = x + math.random(-1, 1); pts[#pts + 1] = { x, y } end
+    SC.bolt = { pts = pts, flash = t + 0.12, untilT = t + 0.4 }
+    SC.nextBolt = t + math.random(4, 12)
+  end
+  if SC.bolt and t < SC.bolt.untilT then
+    for _, p in ipairs(SC.bolt.pts) do put(p[1], p[2], YELLOW) end
+  end
+
+  blitColorCanvas(x1, y1, cw, ch, px)
+end
+
 local function drawMinecraft(t)
   local x1, x2 = L.rx1, L.rx2
   fill(x1 + 1, L.my1 + 1, x2 - 1, L.my2 - 1, PANEL)
   thinBox(x1, L.my1, x2, L.my2, MAGENTA)
+  updateWeather(t)
   local mc, label = mcClock()
-  -- sky colours by time of day
-  local top, low
-  if mc >= 6.5 and mc < 17.5 then top, low = DAYSKY, DAYSKY
-  elseif mc >= 4.5 and mc < 6.5 then top, low = NIGHTSKY, ORANGE     -- sunrise
-  elseif mc >= 17.5 and mc < 19.5 then top, low = PINK, ORANGE       -- sunset
-  else top, low = NIGHTSKY, NIGHTSKY end
-  local sx1, sx2, sy1, sy2 = x1 + 1, x2 - 1, L.sky1, L.sky2
-  local skyH = sy2 - sy1                      -- last row is grass
-  for y = sy1, sy2 - 1 do
-    local col = (y - sy1) < skyH / 2 and top or low
-    fill(sx1, y, sx2, y, col)
-  end
-  local night = top == NIGHTSKY
-  if night then
-    if #skyStars == 0 then
-      for i = 1, 14 do skyStars[i] = { math.random(0, 1000) / 1000, math.random(0, 1000) / 1000, math.random() } end
-    end
-    for _, s in ipairs(skyStars) do
-      local sx = sx1 + math.floor(s[1] * (sx2 - sx1))
-      local sy = sy1 + math.floor(s[2] * (skyH - 1))
-      local tw = math.sin(t * 2 + s[3] * 6) > -0.3
-      local bg = (sy - sy1) < skyH / 2 and top or low
-      if tw and bg == NIGHTSKY then setCell(sx, sy, ".", LGRAY, bg) end
-    end
-  end
-  -- sun 6:00 -> 18:00, moon 18:00 -> 6:00, along an arc
-  local function body(frac, col)
-    local bx = sx1 + math.floor(frac * (sx2 - sx1 - 1) + 0.5)
-    local by = sy2 - 1 - math.floor(math.sin(frac * math.pi) * (skyH - 1) + 0.5)
-    setCell(bx, by, " ", WHITE, col); setCell(bx + 1, by, " ", WHITE, col)
-  end
-  if mc >= 6 and mc < 18 then body((mc - 6) / 12, YELLOW) else body(((mc - 18) % 24) / 12, WHITE) end
-  for x = sx1, sx2 do setCell(x, sy2, "\143", GRASS, BLACK) end    -- grass strip
-  -- digital time + day counter
+  drawScene(t, mc, x1 + 1, L.sky1, x2 - x1 - 1, L.sky2 - L.sky1 + 1)
   local day = os.day("ingame")
   local ds = tostring(day):reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
-  local line = label .. "   " .. G_DOT .. "   DAY " .. ds
+  local parts = { label, "DAY " .. ds }
+  if weather.thunder then parts[3] = "STORM" elseif weather.rain then parts[3] = "RAIN" end
+  local sep = "  " .. G_DOT .. "  "
+  local line = table.concat(parts, sep)
   local iw = x2 - x1 - 1
-  text(x1 + 1 + math.floor((iw - #line) / 2), L.mdy, line, WHITE, PANEL)
-  text(x1 + 1 + math.floor((iw - #line) / 2) + #label + 3, L.mdy, G_DOT, ACCENT, PANEL)
+  local lx = x1 + 1 + math.floor((iw - #line) / 2)
+  text(lx, L.mdy, line, WHITE, PANEL)
+  local pos = lx
+  for i = 1, #parts - 1 do
+    pos = pos + #parts[i]
+    text(pos + 2, L.mdy, G_DOT, MAGENTA, PANEL)
+    pos = pos + #sep
+  end
+  if parts[3] then text(lx + #line - #parts[3], L.mdy, parts[3], weather.thunder and YELLOW or LBLUE, PANEL) end
 end
 
 -- ---------------------------------------------------------- green: now playing + controls
