@@ -843,8 +843,67 @@ local function prefetchLoop()
   end
 end
 
+-- ---------------------------------------------------------- network (remote screens)
+local PROTO = "spacejukebox"
+local netOn = false
+local function openNet()
+  netOn = false
+  for _, name in ipairs(peripheral.getNames()) do
+    if peripheral.getType(name) == "modem" then
+      if pcall(rednet.open, name) then netOn = true end
+    end
+  end
+end
+
+local function sendState()
+  if not netOn then return end
+  local names = {}
+  for i, p in ipairs(S.lists or {}) do names[i] = p.name end
+  pcall(rednet.broadcast, {
+    type = "state", names = names,
+    pl = S.pl, queue = S.queue, qi = S.qi, curPl = S.curPl, curSi = S.curSi,
+    fromQueue = S.fromQueue, upNext = S.upNext,
+    title = S.song and S.song.title, artist = S.song and S.song.artist,
+    pos = position(), dur = duration(), paused = S.paused, loading = S.loading, err = S.err,
+  }, PROTO)
+end
+
+local function sameOrder(a, b)
+  if type(a) ~= "table" or type(b) ~= "table" or #a ~= #b then return false end
+  for i = 1, #a do if a[i] ~= b[i] then return false end end
+  return true
+end
+
+local function handleRemote(msg)
+  if type(msg) ~= "table" then return end
+  local c = msg.cmd
+  if c == "toggle" then togglePause()
+  elseif c == "next" then nextTrack()
+  elseif c == "prev" then prevTrack()
+  elseif c == "seek" and tonumber(msg.sec) then seek(tonumber(msg.sec))
+  elseif c == "skip" and tonumber(msg.by) then seek(position() + tonumber(msg.by))
+  elseif c == "queue" and S.song then
+    local p, si = tonumber(msg.pl), tonumber(msg.si)
+    if p and si and S.lists[p] and S.lists[p].songs[si] then toggleQueue(p, si) end
+  elseif c == "play" then
+    local p, idx, order = tonumber(msg.pl), tonumber(msg.idx), msg.order
+    local pl = p and S.lists[p]
+    if not (pl and idx and type(order) == "table" and #order == #pl.songs and order[idx]) then return end
+    if S.pl == p and sameOrder(order, S.queue) then
+      playIndex(idx)
+    else
+      local copy = {}
+      for i = 1, #order do copy[i] = tonumber(order[i]) or i end
+      startPlaylist(p, copy, idx)
+      if UI.viewPl == p then UI.viewOrder = S.queue end
+    end
+  end
+  sendState()
+end
+
 local function renderLoop()
   local last = now()
+  local frames = 0
   local timer = os.startTimer(0)
   while true do
     local _, id = os.pullEventRaw("timer")
@@ -852,6 +911,8 @@ local function renderLoop()
       local t = now()
       draw(math.min(0.5, t - last), t)
       last = t
+      frames = frames + 1
+      if frames % 5 == 0 then sendState() end
       timer = os.startTimer(CFG.frame)
     end
   end
@@ -872,7 +933,8 @@ local function inputLoop()
   while true do
     local ev, a, b, c = os.pullEventRaw()
     if ev == "terminate" then return
-    elseif ev == "monitor_touch" and monByName[a] then handleTouch(b, c)
+    elseif ev == "monitor_touch" and monByName[a] then handleTouch(b, c); sendState()
+    elseif ev == "rednet_message" and c == PROTO then handleRemote(b)
     elseif (ev == "monitor_resize" and monByName[a]) or ev == "peripheral" or ev == "peripheral_detach" then
       if ev ~= "monitor_resize" then
         local found = { peripheral.find("speaker") }
@@ -881,6 +943,7 @@ local function inputLoop()
           if S.data and not S.paused then beginAt(position()) end -- restart all speakers together
         end
       end
+      openNet()
       local old = #mons
       findMonitors()
       if #mons > 0 then
@@ -924,6 +987,7 @@ end
 
 if _G.__JB_TEST then _G.__JB = { S = S, UI = UI, hits = function() return hits end, L = L } end
 
+openNet()
 parallel.waitForAny(inputLoop, audioLoop, prefetchLoop, renderLoop)
 
 -- cleanup
