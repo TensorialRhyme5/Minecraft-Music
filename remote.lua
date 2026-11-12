@@ -299,94 +299,134 @@ local function drawLeft()
 end
 
 -- ---------------------------------------------------------- white: spinning 3D shape
-local PHI = (1 + math.sqrt(5)) / 2
-local SHAPES = {}
-local function makeShape(name, verts)
-  -- edges = all pairs at the minimum vertex distance
-  local best, edges = math.huge, {}
-  for i = 1, #verts do for j = i + 1, #verts do
-    local a, b = verts[i], verts[j]
-    local d = (a[1] - b[1]) ^ 2 + (a[2] - b[2]) ^ 2 + (a[3] - b[3]) ^ 2
-    if d < best - 1e-6 then best = d end
-  end end
-  for i = 1, #verts do for j = i + 1, #verts do
-    local a, b = verts[i], verts[j]
-    local d = (a[1] - b[1]) ^ 2 + (a[2] - b[2]) ^ 2 + (a[3] - b[3]) ^ 2
-    if math.abs(d - best) < 1e-6 then edges[#edges + 1] = { i, j } end
-  end end
-  local r = 0
-  for _, v in ipairs(verts) do r = math.max(r, math.sqrt(v[1] ^ 2 + v[2] ^ 2 + v[3] ^ 2)) end
-  for _, v in ipairs(verts) do v[1], v[2], v[3] = v[1] / r, v[2] / r, v[3] / r end
-  SHAPES[#SHAPES + 1] = { name = name, v = verts, e = edges }
-end
-do
-  local cube = {}
-  for x = -1, 1, 2 do for y = -1, 1, 2 do for z = -1, 1, 2 do cube[#cube + 1] = { x, y, z } end end end
-  makeShape("CUBE", cube)
-  makeShape("OCTAHEDRON", { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } })
-  makeShape("PYRAMID", { { 1, 1, 1 }, { 1, -1, -1 }, { -1, 1, -1 }, { -1, -1, 1 } })
-  local ico = {}
-  for _, a in ipairs({ -1, 1 }) do for _, b in ipairs({ -PHI, PHI }) do
-    ico[#ico + 1] = { 0, a, b }; ico[#ico + 1] = { a, b, 0 }; ico[#ico + 1] = { b, 0, a }
-  end end
-  makeShape("ICOSAHEDRON", ico)
-end
-local shapeIdx, shapeChanged = 1, -10
-
-local function draw3D(t)
-  local x1, y1, x2, y2 = L.wx1, 1, L.wx2, L.topH
-  local cw, ch = x2 - x1 + 1, y2 - y1 + 1
-  local pw, ph = cw * 2, ch * 3                 -- teletext sub-pixels (square)
-  local pix = {}
-  local shape = SHAPES[shapeIdx]
-  local ax, ay = t * 0.9, t * 1.3
-  local cx, sx, cy, sy = math.cos(ax), math.sin(ax), math.cos(ay), math.sin(ay)
-  local scale = math.min(pw, ph) * 0.42 * 3.2
-  local pts = {}
-  for i, v in ipairs(shape.v) do
-    local x, y, z = v[1], v[2], v[3]
-    y, z = y * cx - z * sx, y * sx + z * cx         -- rotate around X
-    x, z = x * cy + z * sy, -x * sy + z * cy        -- rotate around Y
-    local d = z + 3.2
-    pts[i] = { pw / 2 + x * scale / d, ph / 2 + y * scale / d, z }
-  end
-  local function plot(px, py, z)
-    px, py = math.floor(px + 0.5), math.floor(py + 0.5)
-    if px < 0 or py < 0 or px >= pw or py >= ph then return end
-    local k = py * pw + px
-    if not pix[k] or z < pix[k] then pix[k] = z end
-  end
-  for _, e in ipairs(shape.e) do
-    local a, b = pts[e[1]], pts[e[2]]
-    local steps = math.max(1, math.ceil(math.max(math.abs(b[1] - a[1]), math.abs(b[2] - a[2]))))
-    for s = 0, steps do
-      local f = s / steps
-      plot(a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f, a[3] + (b[3] - a[3]) * f)
-    end
-  end
+-- Teletext sub-pixel canvas: each cell is 2x3 square "pixels".
+-- pix[k] = depth (smaller = closer); colourOf(depth) picks the cell colour.
+local function blitCanvas(x1, y1, cw, ch, pix, colourOf, bg)
+  local pw = cw * 2
   for cyy = 0, ch - 1 do
     for cxx = 0, cw - 1 do
       local bits, zmin = 0, math.huge
       for sub = 0, 5 do
-        local k = (cyy * 3 + math.floor(sub / 2)) * pw + cxx * 2 + sub % 2
-        local z = pix[k]
+        local z = pix[(cyy * 3 + math.floor(sub / 2)) * pw + cxx * 2 + sub % 2]
         if z then bits = bits + 2 ^ sub; if z < zmin then zmin = z end end
       end
       if bits > 0 then
-        local col = zmin < -0.3 and WHITE or (zmin < 0.3 and LBLUE or GRAY)
-        if bits >= 32 then
-          setCell(x1 + cxx, y1 + cyy, string.char(128 + (63 - bits)), BLACK, col)
-        else
-          setCell(x1 + cxx, y1 + cyy, string.char(128 + bits), col, BLACK)
-        end
+        local col = colourOf(zmin)
+        if bits >= 32 then setCell(x1 + cxx, y1 + cyy, string.char(128 + (63 - bits)), bg, col)
+        else setCell(x1 + cxx, y1 + cyy, string.char(128 + bits), col, bg) end
       end
     end
   end
-  if now() - shapeChanged < 1.5 then
-    local n = shape.name
+end
+
+-- Every shape is a cloud of NP points; morphing moves point i of one shape to point i of the next.
+local NP = 180
+local PHI = (1 + math.sqrt(5)) / 2
+local SHAPES = {}
+
+local function norm(pts)
+  local r = 0
+  for _, v in ipairs(pts) do r = math.max(r, math.sqrt(v[1] ^ 2 + v[2] ^ 2 + v[3] ^ 2)) end
+  for _, v in ipairs(pts) do v[1], v[2], v[3] = v[1] / r, v[2] / r, v[3] / r end
+  -- sort around the vertical axis so the warp swirls instead of scrambling
+  table.sort(pts, function(a, b) return math.atan2(a[3], a[1]) + a[2] * 0.01 < math.atan2(b[3], b[1]) + b[2] * 0.01 end)
+  return pts
+end
+
+local function edgeShape(name, verts)
+  local best, edges = math.huge, {}
+  local function d2(a, b) return (a[1] - b[1]) ^ 2 + (a[2] - b[2]) ^ 2 + (a[3] - b[3]) ^ 2 end
+  for i = 1, #verts do for j = i + 1, #verts do best = math.min(best, d2(verts[i], verts[j])) end end
+  for i = 1, #verts do for j = i + 1, #verts do
+    if math.abs(d2(verts[i], verts[j]) - best) < 1e-6 then edges[#edges + 1] = { verts[i], verts[j] } end
+  end end
+  local pts, per = {}, NP / #edges
+  for n = 0, NP - 1 do
+    local e = edges[math.floor(n / per) + 1]
+    local f = (n % per) / per + 0.5 / per
+    local a, b = e[1], e[2]
+    pts[#pts + 1] = { a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f, a[3] + (b[3] - a[3]) * f }
+  end
+  SHAPES[#SHAPES + 1] = { name = name, p = norm(pts) }
+end
+
+local function curveShape(name, fn)
+  local pts = {}
+  for n = 0, NP - 1 do pts[#pts + 1] = fn(n) end
+  SHAPES[#SHAPES + 1] = { name = name, p = norm(pts) }
+end
+
+do
+  local cube = {}
+  for x = -1, 1, 2 do for y = -1, 1, 2 do for z = -1, 1, 2 do cube[#cube + 1] = { x, y, z } end end end
+  edgeShape("CUBE", cube)
+  edgeShape("OCTAHEDRON", { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } })
+  curveShape("TORUS", function(n)                 -- 12 rings of 15 points
+    local ring, k = math.floor(n / 15), n % 15
+    local u, v = ring / 12 * 2 * math.pi, k / 15 * 2 * math.pi
+    local R, r = 0.68, 0.32
+    return { (R + r * math.cos(v)) * math.cos(u), r * math.sin(v), (R + r * math.cos(v)) * math.sin(u) }
+  end)
+  local ico = {}
+  for _, a in ipairs({ -1, 1 }) do for _, b in ipairs({ -PHI, PHI }) do
+    ico[#ico + 1] = { 0, a, b }; ico[#ico + 1] = { a, b, 0 }; ico[#ico + 1] = { b, 0, a }
+  end end
+  edgeShape("ICOSAHEDRON", ico)
+  curveShape("GYROSCOPE", function(n)             -- three rings at right angles
+    local ring, a = math.floor(n / 60), (n % 60) / 60 * 2 * math.pi
+    local c, s = math.cos(a), math.sin(a)
+    if ring == 0 then return { c, s, 0 } elseif ring == 1 then return { c, 0, s } else return { 0, c, s } end
+  end)
+  edgeShape("PYRAMID", { { 1, 1, 1 }, { 1, -1, -1 }, { -1, 1, -1 }, { -1, -1, 1 } })
+end
+
+local HOLD, MORPH = 5, 1.6
+local morph = { from = 1, to = 1, start = -100, nextAt = 0 }
+local function startMorph(t)
+  morph.from = morph.to
+  morph.to = morph.to % #SHAPES + 1
+  morph.start, morph.nextAt = t, t + MORPH + HOLD
+end
+
+local function draw3D(t)
+  local x1, y1, x2, y2 = L.wx1, 1, L.wx2, L.topH
+  local cw, ch = x2 - x1 + 1, y2 - y1 + 1
+  local pw, ph = cw * 2, ch * 3
+  if morph.nextAt == 0 then morph.nextAt = t + HOLD end
+  if t >= morph.nextAt then startMorph(t) end
+  local f = clamp((t - morph.start) / MORPH, 0, 1)
+  local e = f * f * (3 - 2 * f)                                -- ease in/out
+  local warping = f > 0 and f < 1
+  local A, B = SHAPES[morph.from].p, SHAPES[morph.to].p
+  local spin = t + (warping and math.sin(f * math.pi) * 1.2 or 0)   -- spins faster mid-warp
+  local ax, ay = spin * 0.9, spin * 1.3
+  local cx, sx, cy, sy = math.cos(ax), math.sin(ax), math.cos(ay), math.sin(ay)
+  local scale = math.min(pw, ph) * 0.42 * 3.2 * (1 + 0.18 * math.sin(f * math.pi))
+  local pix = {}
+  for i = 1, NP do
+    local a, b = A[i], B[i]
+    local x = a[1] + (b[1] - a[1]) * e
+    local y = a[2] + (b[2] - a[2]) * e
+    local z = a[3] + (b[3] - a[3]) * e
+    y, z = y * cx - z * sx, y * sx + z * cx
+    x, z = x * cy + z * sy, -x * sy + z * cy
+    local d = z + 3.2
+    local px = math.floor(pw / 2 + x * scale / d + 0.5)
+    local py = math.floor(ph / 2 + y * scale / d + 0.5)
+    if px >= 0 and py >= 0 and px < pw and py < ph then
+      local k = py * pw + px
+      if not pix[k] or z < pix[k] then pix[k] = z end
+    end
+  end
+  blitCanvas(x1, y1, cw, ch, pix, function(z)
+    if warping then return z < 0 and MAGENTA or LBLUE end      -- glows pink/blue while warping
+    return z < -0.3 and WHITE or (z < 0.3 and LBLUE or GRAY)
+  end, BLACK)
+  if t - morph.start < MORPH + 1.2 then
+    local n = SHAPES[morph.to].name
     text(x1 + math.floor((cw - #n) / 2), y2, n, LGRAY)
   end
-  hit("shape", x1, y1, x2, y2, function() shapeIdx = shapeIdx % #SHAPES + 1; shapeChanged = now() end)
+  hit("shape", x1, y1, x2, y2, function() startMorph(now()) end)
 end
 
 -- ---------------------------------------------------------- red: real Mountain Time
@@ -430,29 +470,44 @@ local function mountainTime()
 end
 
 local FONT = {
-  ["0"] = { "111", "101", "101", "101", "111" }, ["1"] = { "010", "110", "010", "010", "111" },
-  ["2"] = { "111", "001", "111", "100", "111" }, ["3"] = { "111", "001", "111", "001", "111" },
-  ["4"] = { "101", "101", "111", "001", "001" }, ["5"] = { "111", "100", "111", "001", "111" },
-  ["6"] = { "111", "100", "111", "101", "111" }, ["7"] = { "111", "001", "001", "001", "001" },
-  ["8"] = { "111", "101", "111", "101", "111" }, ["9"] = { "111", "101", "111", "001", "111" },
-  [":"] = { "0", "1", "0", "1", "0" },
+  ["0"] = { "01110", "10001", "10011", "10101", "11001", "10001", "01110" },
+  ["1"] = { "00100", "01100", "00100", "00100", "00100", "00100", "01110" },
+  ["2"] = { "01110", "10001", "00001", "00010", "00100", "01000", "11111" },
+  ["3"] = { "11110", "00001", "00001", "01110", "00001", "00001", "11110" },
+  ["4"] = { "00010", "00110", "01010", "10010", "11111", "00010", "00010" },
+  ["5"] = { "11111", "10000", "11110", "00001", "00001", "10001", "01110" },
+  ["6"] = { "00110", "01000", "10000", "11110", "10001", "10001", "01110" },
+  ["7"] = { "11111", "00001", "00010", "00100", "01000", "01000", "01000" },
+  ["8"] = { "01110", "10001", "10001", "01110", "10001", "10001", "01110" },
+  ["9"] = { "01110", "10001", "10001", "01111", "00001", "00010", "01100" },
+  [":"] = { "0", "0", "1", "0", "1", "0", "0" },
 }
-local function bigWidth(s)
+-- width in teletext pixels (1 px gap between glyphs)
+local function smallWidth(s)
   local w = 0
   for i = 1, #s do w = w + #FONT[s:sub(i, i)][1] + 1 end
   return w - 1
 end
-local function bigText(x, y, s, col, colonOn)
+-- draws text 3 cells tall (9 px); returns width in cells
+local function smallText(x, y, s, col, bg, colonOn)
+  local pwPx = smallWidth(s)
+  local cw = math.ceil(pwPx / 2)
+  local pw = cw * 2
+  local pix, px = {}, 0
   for i = 1, #s do
-    local g = FONT[s:sub(i, i)]
-    local isColon = s:sub(i, i) == ":"
-    for r = 1, 5 do
-      for c = 1, #g[r] do
-        if g[r]:sub(c, c) == "1" and (not isColon or colonOn) then setCell(x + c - 1, y + r - 1, " ", WHITE, col) end
+    local c = s:sub(i, i)
+    local g = FONT[c]
+    if c ~= ":" or colonOn then
+      for r = 1, 7 do
+        for k = 1, #g[r] do
+          if g[r]:sub(k, k) == "1" then pix[(r) * pw + px + k - 1] = 0 end
+        end
       end
     end
-    x = x + #g[1] + 1
+    px = px + #g[1] + 1
   end
+  blitCanvas(x, y, cw, 3, pix, function() return col end, bg)
+  return cw
 end
 
 local DAYS = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" }
@@ -467,15 +522,16 @@ local function drawClock()
   local s = h12 .. ":" .. string.format("%02d", mt.min)
   local ampm = mt.hour < 12 and "AM" or "PM"
   local iw = x2 - x1 - 1
-  local tw = bigWidth(s) + 1 + #ampm
+  local cw = math.ceil(smallWidth(s) / 2)
+  local tw = cw + 1 + 3
   local tx = x1 + 1 + math.max(0, math.floor((iw - tw) / 2))
-  local ty = y1 + 1 + math.max(0, math.floor((y2 - y1 - 1 - 6) / 2))
-  bigText(tx, ty, s, WHITE, math.floor(mt.sec) % 2 == 0)
-  text(tx + bigWidth(s) + 1, ty, ampm, RED, PANEL)
-  text(tx + bigWidth(s) + 1, ty + 4, mt.dst and "MDT" or "MST", GRAY, PANEL)
+  local ty = y1 + 2
+  smallText(tx, ty, s, WHITE, PANEL, math.floor(mt.sec) % 2 == 0)
+  text(tx + cw + 1, ty, ampm, RED, PANEL)
+  text(tx + cw + 1, ty + 2, mt.dst and "MDT" or "MST", GRAY, PANEL)
   local date = DAYS[mt.wday + 1] .. ", " .. MONTHS[mt.month] .. " " .. mt.day
   if #date > iw then date = DAYS[mt.wday + 1]:sub(1, 3) .. ", " .. MONTHS[mt.month] .. " " .. mt.day end
-  text(x1 + 1 + math.floor((iw - #date) / 2), ty + 5, date, LGRAY, PANEL)
+  text(x1 + 1 + math.floor((iw - #date) / 2), ty + 4, date, LGRAY, PANEL)
 end
 
 -- ---------------------------------------------------------- light blue + purple: Minecraft time
@@ -591,9 +647,30 @@ local function drawMusic(t)
 end
 
 -- ---------------------------------------------------------- frame
+-- falling starfield, same feel as the jukebox (speeds scaled to this screen's height)
+local stars, lastT = {}, nil
+local STAR_SPEED = { 3, 7, 16 }
+local function drawStars(t)
+  if #stars == 0 then
+    for i = 1, math.floor(W * H / 26) do stars[i] = { x = math.random(1, W), y = math.random() * H, l = math.random(1, 3) } end
+  end
+  local dt = lastT and math.min(0.5, t - lastT) or 0
+  lastT = t
+  local k = H / 38
+  for _, s in ipairs(stars) do
+    s.y = s.y + STAR_SPEED[s.l] * k * dt
+    if s.y >= H + 2 then s.y = -math.random() * 3; s.x = math.random(1, W) end
+    local y = math.floor(s.y) + 1
+    if s.x <= L.lw or s.l == 1 then setCell(s.x, y, ".", GRAY)
+    elseif s.l == 2 then setCell(s.x, y, G_DOT, LGRAY)
+    else setCell(s.x, y - 1, "|", GRAY); setCell(s.x, y, "*", WHITE) end
+  end
+end
+
 local function draw(t)
   fbClear()
   hits = {}
+  drawStars(t)
   for y = 1, H do setCell(L.sep, y, G_VLINE, YELLOW, BLACK) end
   drawLeft()
   draw3D(t)
@@ -646,7 +723,7 @@ while true do
       local h = hits[i]
       if b >= h.x1 and b <= h.x2 and c >= h.y1 and c <= h.y2 then flash[h.id] = now(); h.fn(b, c); break end
     end
-  elseif ev == "monitor_resize" and a == monName then computeLayout()
+  elseif ev == "monitor_resize" and a == monName then computeLayout(); stars = {}
   elseif ev == "peripheral" or ev == "peripheral_detach" then openNet()
   end
 end
