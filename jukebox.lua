@@ -901,6 +901,19 @@ local function handleRemote(msg)
   sendState()
 end
 
+-- bass level + simple beat detection for remote screens (sent ~10x a second)
+local beatAvg, lastBeat = 0, 0
+local function sendBeat(t)
+  if not netOn then return end
+  local playing = S.data and not S.paused and not S.loading
+  local bass = 0
+  if playing then bass = (levels[1] + levels[2] + levels[3] + levels[4]) / 4 end
+  local beat = playing and bass > 0.3 and bass > beatAvg * 1.25 + 0.05 and t - lastBeat > 0.25
+  if beat then lastBeat = t end
+  beatAvg = beatAvg * 0.85 + bass * 0.15
+  pcall(rednet.broadcast, { type = "beat", bass = bass, beat = beat }, PROTO)
+end
+
 local function renderLoop()
   local last = now()
   local frames = 0
@@ -913,6 +926,7 @@ local function renderLoop()
       last = t
       frames = frames + 1
       if frames % 5 == 0 then sendState() end
+      sendBeat(t)
       timer = os.startTimer(CFG.frame)
     end
   end

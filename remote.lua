@@ -388,6 +388,22 @@ local function startMorph(t)
   morph.start, morph.nextAt = t, t + MORPH + HOLD
 end
 
+-- music reaction (beat messages from the jukebox)
+local BEAT = { bass = 0, at = -10, last = -10, colour = 1, rings = {} }
+local SCHEMES = {
+  { WHITE, LBLUE, GRAY }, { WHITE, MAGENTA, GRAY }, { YELLOW, RED, GRAY },
+  { WHITE, GRASS, GRAY }, { LBLUE, MAGENTA, GRAY }, { YELLOW, LBLUE, GRAY },
+}
+local function onBeat(msg, t)
+  BEAT.bass, BEAT.at = tonumber(msg.bass) or 0, t
+  if msg.beat then
+    BEAT.last = t
+    BEAT.colour = BEAT.colour % #SCHEMES + 1
+    BEAT.rings[#BEAT.rings + 1] = t
+    if #BEAT.rings > 3 then table.remove(BEAT.rings, 1) end
+  end
+end
+
 local function draw3D(t)
   local x1, y1, x2, y2 = L.wx1, 1, L.wx2, L.topH
   local cw, ch = x2 - x1 + 1, y2 - y1 + 1
@@ -398,10 +414,13 @@ local function draw3D(t)
   local e = f * f * (3 - 2 * f)                                -- ease in/out
   local warping = f > 0 and f < 1
   local A, B = SHAPES[morph.from].p, SHAPES[morph.to].p
-  local spin = t + (warping and math.sin(f * math.pi) * 1.2 or 0)   -- spins faster mid-warp
+  local bass = (t - BEAT.at < 1) and BEAT.bass or 0
+  local pulse = math.exp(-(t - BEAT.last) * 7)                 -- 1 on the beat, fades fast
+  BEAT.spin = (BEAT.spin or 0) + (bass * 1.5) * (CFG.frame)    -- extra spin while the bass is heavy
+  local spin = t + BEAT.spin + (warping and math.sin(f * math.pi) * 1.2 or 0)   -- spins faster mid-warp
   local ax, ay = spin * 0.9, spin * 1.3
   local cx, sx, cy, sy = math.cos(ax), math.sin(ax), math.cos(ay), math.sin(ay)
-  local scale = math.min(pw, ph) * 0.42 * 3.2 * (1 + 0.18 * math.sin(f * math.pi))
+  local scale = math.min(pw, ph) * 0.42 * 3.2 * (1 + 0.18 * math.sin(f * math.pi)) * (1 + 0.16 * pulse + 0.06 * bass)
   local pix = {}
   for i = 1, NP do
     local a, b = A[i], B[i]
@@ -418,9 +437,28 @@ local function draw3D(t)
       if not pix[k] or z < pix[k] then pix[k] = z end
     end
   end
+  -- light rings expanding from the shape on each beat
+  for _, rt in ipairs(BEAT.rings) do
+    local age = t - rt
+    if age < 0.5 then
+      local rad = math.min(pw, ph) * (0.28 + age * 0.9)
+      for a = 0, 47 do
+        local ang = a / 48 * 2 * math.pi
+        local px = math.floor(pw / 2 + math.cos(ang) * rad + 0.5)
+        local py = math.floor(ph / 2 + math.sin(ang) * rad * 0.9 + 0.5)
+        if px >= 0 and py >= 0 and px < pw and py < ph then
+          local k = py * pw + px
+          if not pix[k] then pix[k] = 10 + age end            -- depth >= 10 marks ring pixels
+        end
+      end
+    end
+  end
+  local sc = SCHEMES[BEAT.colour]
   blitCanvas(x1, y1, cw, ch, pix, function(z)
+    if z >= 10 then return (z - 10) < 0.25 and sc[1] or sc[2] end   -- ring: bright, then dimmer
     if warping then return z < 0 and MAGENTA or LBLUE end      -- glows pink/blue while warping
-    return z < -0.3 and WHITE or (z < 0.3 and LBLUE or GRAY)
+    if pulse > 0.5 then return z < 0.3 and sc[1] or sc[2] end  -- flash brighter right on the beat
+    return z < -0.3 and sc[1] or (z < 0.3 and sc[2] or sc[3])
   end, BLACK)
   if t - morph.start < MORPH + 1.2 then
     local n = SHAPES[morph.to].name
@@ -971,6 +1009,8 @@ while true do
   elseif ev == "timer" and a == timer then
     draw(now())
     timer = os.startTimer(CFG.frame)
+  elseif ev == "rednet_message" and c == PROTO and type(b) == "table" and b.type == "beat" then
+    onBeat(b, now())
   elseif ev == "rednet_message" and c == PROTO and type(b) == "table" and b.type == "state" then
     J.st, J.at, J.id = b, now(), a
     -- playlist file changed on GitHub? reload so both sides agree
