@@ -753,15 +753,24 @@ local function waitWake(timeout)
   os.cancelTimer(id)
 end
 
+-- Feed every speaker the same chunk in lockstep. Each wake-up tries ALL speakers
+-- that still need the chunk, so no speaker sits empty waiting on another one
+-- (that gap is what made multiple speakers drift apart).
 local function playAll(pcm, g)
-  for _, spk in ipairs(speakers) do
-    while not spk.playAudio(pcm, CFG.volume) do
-      os.pullEventRaw()
-      if S.gen ~= g then return false end
+  local list = speakers
+  local pending, left = {}, #list
+  for i = 1, left do pending[i] = true end
+  while true do
+    for i, spk in ipairs(list) do
+      if pending[i] then
+        local ok, accepted = pcall(spk.playAudio, pcm, CFG.volume)
+        if not ok or accepted then pending[i] = false; left = left - 1 end -- detached speakers are skipped
+      end
     end
-    if S.gen ~= g then return false end
+    if left == 0 then return true end
+    os.pullEventRaw()
+    if S.gen ~= g or speakers ~= list then return false end
   end
-  return true
 end
 
 local function audioLoop()
@@ -839,6 +848,13 @@ local function inputLoop()
     if ev == "terminate" then return
     elseif ev == "monitor_touch" and monByName[a] then handleTouch(b, c)
     elseif (ev == "monitor_resize" and monByName[a]) or ev == "peripheral" or ev == "peripheral_detach" then
+      if ev ~= "monitor_resize" then
+        local found = { peripheral.find("speaker") }
+        if #found ~= #speakers then
+          speakers = found
+          if S.data and not S.paused then beginAt(position()) end -- restart all speakers together
+        end
+      end
       local old = #mons
       findMonitors()
       if #mons > 0 then
