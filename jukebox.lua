@@ -10,7 +10,7 @@ local CFG = {
   textScale  = 0.5,   -- monitor text scale (0.5 = most detail)
   volume     = 1.0,   -- speaker volume 0.0 - 3.0
   frame      = 0.1,   -- seconds between screen redraws
-  autoplay   = true,  -- start the first playlist on boot
+  autoplay   = false, -- true = start the first playlist on boot
   eqFloor    = 58,    -- equalizer sensitivity (lower = taller bars)
   eqCeil     = 92,
   eqTilt     = 30,    -- boost for high frequencies
@@ -378,7 +378,8 @@ local function openPlaylist(p)
   if S.pl == p then UI.viewOrder = S.queue
   elseif UI.viewPl ~= p or not UI.viewOrder then UI.viewOrder = shuffled(#S.lists[p].songs) end
   UI.viewPl, UI.lastPl, UI.view, UI.scroll = p, p, "songs", 0
-  if S.pl == p then ensureVisible(S.qi) end
+  if S.pl == p then ensureVisible(S.qi)
+  elseif not S.song then startPlaylist(p, UI.viewOrder, 1) end -- nothing playing yet: start it
 end
 
 -- ---------------------------------------------------------- downloading
@@ -550,7 +551,7 @@ local function drawTitle(t)
   fill(L.tx1, L.ty1, L.tx2, L.ty2, PURPLE)
   fill(L.tx1 + 1, L.ty1 + 1, L.tx2 - 1, L.ty2 - 1, PANEL)
   local iw, x0 = L.tw - 4, L.tx1 + 2
-  local title, artist = "Nothing playing", "Tap a song to start"
+  local title, artist = "Nothing playing", "Pick a playlist to start"
   if S.song then title, artist = S.song.title, S.song.artist end
   local mt = t - S.trackStart
   text(x0, L.ty1 + 1, marquee(title, iw, mt), WHITE, PANEL)
