@@ -344,7 +344,7 @@ local S = {
   upNext = {},                      -- queued songs { pl, si } played before the shuffle continues
   curPl = nil, curSi = nil, fromQueue = false,
 }
-local UI = { view = "playlists", viewPl = nil, viewOrder = nil, lastPl = nil, scroll = 0, plScroll = 0, queueMode = false }
+local UI = { view = "playlists", viewPl = nil, viewOrder = nil, lastPl = nil, scroll = 0, plScroll = 0, queueMode = false, power = true }
 local hits, flash = {}, {}
 
 local function stopSpeakers() for _, s in ipairs(speakers) do pcall(s.stop) end end
@@ -403,6 +403,7 @@ local function termStatus()
   print("")
   term.setTextColour(colors.lightGray)
   print("Space = pause   Left/Right = prev/next")
+  print("P = screen power on/off")
   print("Q = quit")
 end
 
@@ -1014,6 +1015,15 @@ local function drawControls()
   end
 end
 
+-- power: off = music stops and the screen goes fully dark; tap anywhere to turn it back on
+local function drawOff()
+  fbClear()
+  local msg = "tap anywhere to turn on"
+  text(math.floor((W - #msg) / 2) + 1, math.floor(H / 2), msg, GRAY)
+  present()
+end
+local setPower            -- defined after the network code (it broadcasts state)
+
 local function draw(dt, t)
   fbClear()
   hits = {}
@@ -1030,6 +1040,11 @@ local function draw(dt, t)
   drawEQ()
   drawProgress()
   drawControls()
+  -- power button (top-right corner, beside the title box)
+  local px1 = math.max(L.tx2 + 3, W - 8)
+  if px1 + 4 <= W then
+    button("power", px1, 1, W, 3, "OFF", WHITE, RED, function() setPower(false) end)
+  end
   present()
 end
 
@@ -1191,6 +1206,16 @@ local function sendBeat(t)
   pcall(rednet.broadcast, { type = "beat", bass = BT.bass, beat = BT.beat }, PROTO)
 end
 
+setPower = function(on)
+  if UI.power == on then return end
+  UI.power = on
+  if not on then
+    if S.data and not S.paused then togglePause() end
+    drawOff()
+  end
+  sendState()
+end
+
 local function renderLoop()
   local last = now()
   local frames = 0
@@ -1199,17 +1224,20 @@ local function renderLoop()
     local _, id = os.pullEventRaw("timer")
     if id == timer then
       local t = now()
-      draw(math.min(0.5, t - last), t)
+      if UI.power then
+        draw(math.min(0.5, t - last), t)
+        sendBeat(t)
+      end
       last = t
       frames = frames + 1
       if frames % 5 == 0 then sendState() end
-      sendBeat(t)
       timer = os.startTimer(CFG.frame)
     end
   end
 end
 
 local function handleTouch(x, y)
+  if not UI.power then setPower(true); return end
   for i = #hits, 1, -1 do
     local h = hits[i]
     if x >= h.x1 and x <= h.x2 and y >= h.y1 and y <= h.y2 then
@@ -1244,6 +1272,7 @@ local function inputLoop()
     elseif ev == "key" then
       if a == keys.q then return
       elseif a == keys.space then togglePause()
+      elseif a == keys.p then setPower(not UI.power)
       elseif a == keys.right then nextTrack()
       elseif a == keys.left then prevTrack() end
     end
