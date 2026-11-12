@@ -736,15 +736,19 @@ local function drawScene(t, mc, x1, y1, cw, ch)
   -- round, bright tree with a thick trunk (shape from Bryan's sketch)
   local tx = hx + hw + 8                                       -- trunk left edge
   rect(tx, b4 + 3, tx + 3, gy - 1, BROWN)                      -- 4-pixel-wide trunk
-  local function leaves(xa, xb, y)
-    for yy = y, y + 2 do for x = xa, xb do
-      put(x, yy, ((x * 3 + yy * 5) % 7 == 0) and GRASS or DKGREEN)   -- dark leaves, lighter specks
-    end end
+  -- canopy = three overlapping circles (big top, lumps lower-left and lower-right), like the sketch
+  local ccx = tx + 1.5
+  local blobs = { { ccx, b4 - 4, 6.5 }, { ccx - 5.5, b4 - 1, 4.5 }, { ccx + 5, b4 - 1, 4.5 } }
+  for y = b4 - 12, b4 + 4 do
+    for x = math.floor(ccx - 11), math.ceil(ccx + 11) do
+      for _, c in ipairs(blobs) do
+        if (x - c[1]) ^ 2 + (y - c[2]) ^ 2 <= c[3] ^ 2 then
+          put(x, y, ((x * 3 + y * 5) % 7 == 0) and GRASS or DKGREEN)   -- dark leaves, lighter specks
+          break
+        end
+      end
+    end
   end
-  leaves(tx - 4, tx + 7, b4 - 9)                               -- rounded top
-  leaves(tx - 6, tx + 9, b4 - 6)
-  leaves(tx - 6, tx + 9, b4 - 3)
-  leaves(tx - 4, tx + 7, b4)                                   -- rounded bottom
 
   -- resident: out during the day, home at night or when it rains
   local R = SC.res
