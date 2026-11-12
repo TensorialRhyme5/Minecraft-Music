@@ -1016,13 +1016,20 @@ local function drawControls()
 end
 
 -- power: off = music stops and the screen goes fully dark; tap anywhere to turn it back on
+local setPower            -- defined after the network code (it broadcasts state)
+-- POWER button in the top-right corner, same spot whether the screen is on or dark
+local function powerButton()
+  local px1 = math.max(L.tx2 + 3, W - 8)
+  if px1 + 4 > W then px1 = W - 8 end
+  button("power", px1, 1, W, 3, "POWER", WHITE, RED, function() setPower(not UI.power) end)
+end
 local function drawOff()
   fbClear()
-  local msg = "tap anywhere to turn on"
-  text(math.floor((W - #msg) / 2) + 1, math.floor(H / 2), msg, GRAY)
+  hits = {}
+  flash.power = nil                  -- the dark screen isn't redrawn, so don't leave a tap flash on it
+  powerButton()
   present()
 end
-local setPower            -- defined after the network code (it broadcasts state)
 
 local function draw(dt, t)
   fbClear()
@@ -1040,11 +1047,7 @@ local function draw(dt, t)
   drawEQ()
   drawProgress()
   drawControls()
-  -- power button (top-right corner, beside the title box)
-  local px1 = math.max(L.tx2 + 3, W - 8)
-  if px1 + 4 <= W then
-    button("power", px1, 1, W, 3, "OFF", WHITE, RED, function() setPower(false) end)
-  end
+  powerButton()
   present()
 end
 
@@ -1237,7 +1240,7 @@ local function renderLoop()
 end
 
 local function handleTouch(x, y)
-  if not UI.power then setPower(true); return end
+  -- while dark, only the POWER button responds (hits only holds that button)
   for i = #hits, 1, -1 do
     local h = hits[i]
     if x >= h.x1 and x <= h.x2 and y >= h.y1 and y <= h.y2 then
