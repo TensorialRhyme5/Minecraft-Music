@@ -224,15 +224,28 @@ local function setupBands(nb)
 end
 
 local LN10 = math.log(10)
-local function analyze(data, pos)
-  local s = math.max(0, math.floor(pos * 6000) - 160)
-  local e = s + 288
-  if e > #data then return false end
-  local pcm = dfpwm.make_decoder()(data:sub(s + 1, e))
-  local off = #pcm - N
+-- recent audio the speakers were fed, reused by the equalizer (no second decode)
+local pcmRing = {}
+local function ringAdd(startSample, pcm)
+  pcmRing[#pcmRing + 1] = { s = startSample, pcm = pcm }
+  if #pcmRing > 6 then table.remove(pcmRing, 1) end
+end
+local function ringFind(i)
+  for k = #pcmRing, 1, -1 do
+    local c = pcmRing[k]
+    if i >= c.s and i < c.s + #c.pcm then return c end
+  end
+end
+
+local function analyze(pos)
+  local first = math.max(0, math.floor(pos * 48000) - N / 2)
+  local c = ringFind(first)
+  if not c or not ringFind(first + N - 1) then return false end
   for i = 0, N - 1 do
+    local si = first + i
+    if si >= c.s + #c.pcm then c = ringFind(si); if not c then return false end end
     local r = rev[i]
-    re[r] = (pcm[off + i + 1] or 0) * hann[i]
+    re[r] = c.pcm[si - c.s + 1] * hann[i]
     im[r] = 0
   end
   fft()
@@ -316,6 +329,7 @@ local function beginAt(sec)
   S.startByte = math.floor(sec * 6000)
   S.feedByte, S.startTime, S.pausePos = S.startByte, now(), sec
   S.gen = S.gen + 1
+  pcmRing = {}
   stopSpeakers(); wake()
 end
 
@@ -722,7 +736,7 @@ local function draw(dt, t)
   fbClear()
   hits = {}
   local active = S.data and not S.paused and not S.loading
-  if active then active = analyze(S.data, position()) end
+  if active then active = analyze(position()) end
   updateBars(dt, active)
   local bass = (shown[1] + shown[2] + shown[3] + shown[4]) / 4
   drawStars(dt, 1 + bass * 2.5)
@@ -775,6 +789,7 @@ end
 
 local function audioLoop()
   local decoder, decGen = nil, -1
+  local lastResync = 0
   while true do
     if S.loading and S.song then
       local id, song = S.trackId, S.song
@@ -793,9 +808,20 @@ local function audioLoop()
       end
     elseif S.data and not S.paused and S.feedByte < #S.data then
       local g = S.gen
+      local t = now()
+      -- If the computer fell behind and the speakers ran dry, they can drift apart.
+      -- Restart them all together at the right spot (at most once every 5s).
+      if S.feedByte > S.startByte and t - S.startTime > 1 and t - lastResync > 5
+        and position() > S.feedByte / 6000 + 0.05 then
+        lastResync = t
+        S.resyncs = (S.resyncs or 0) + 1
+        beginAt(position())
+        g = S.gen
+      end
       if decGen ~= g then decoder = dfpwm.make_decoder(); decGen = g end
       local chunk = S.data:sub(S.feedByte + 1, S.feedByte + CFG.chunk)
       local pcm = decoder(chunk)
+      ringAdd(S.feedByte * 8, pcm)
       if playAll(pcm, g) and S.gen == g then S.feedByte = S.feedByte + #chunk end
     elseif S.data and not S.paused then
       if position() >= duration() - 0.05 then nextTrack() else waitWake(0.1) end
