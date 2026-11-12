@@ -2613,5 +2613,763 @@
       "bpm": 117,
       "theme": "chill"
     }
+  ],
+  "TEN's Playlist": [
+    {
+      "title": "$outh $ide $uicide",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/outh-ide-uicide-uicideboy.dfpwm",
+      "bpm": 112,
+      "theme": "hype"
+    },
+    {
+      "title": "1000 Blunts",
+      "artist": "$uicideboy$",
+      "file": "chill-vibes-2/1000-blunts-uicideboy.dfpwm",
+      "bpm": 136,
+      "theme": "hype"
+    },
+    {
+      "title": "1000 Rounds",
+      "artist": "Pouya",
+      "file": "tens-playlist/1000-rounds-pouya.dfpwm",
+      "bpm": 152,
+      "theme": "hype"
+    },
+    {
+      "title": "2 time zones",
+      "artist": "bbno$",
+      "file": "tens-playlist/2-time-zones-bbno.dfpwm",
+      "bpm": 92,
+      "theme": "hype"
+    },
+    {
+      "title": "2009 Reggie Bush",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/2009-reggie-bush-uicideboy.dfpwm",
+      "bpm": 99,
+      "theme": "classic"
+    },
+    {
+      "title": "2055",
+      "artist": "Sleepy Hallow",
+      "file": "drugs-for-pete/2055-sleepy-hallow.dfpwm",
+      "bpm": 81,
+      "theme": "waves"
+    },
+    {
+      "title": "After Dark",
+      "artist": "Mr.Kitty",
+      "file": "chill-vibes-2/after-dark-mr-kitty-official.dfpwm",
+      "bpm": 92,
+      "theme": "chill"
+    },
+    {
+      "title": "All of My Problems Always Involve Me",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/all-of-my-problems-always-involve-me-uicideboy.dfpwm",
+      "bpm": 99,
+      "theme": "hype"
+    },
+    {
+      "title": "All That Glitters Is Not Gold, but It's Still Damn Beautiful",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/all-that-glitters-is-not-gold-but-it-s-still-damn-beautiful.dfpwm",
+      "bpm": 99,
+      "theme": "hype"
+    },
+    {
+      "title": "Angel Grove",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/angel-grove-uicideboy.dfpwm",
+      "bpm": 99,
+      "theme": "classic"
+    },
+    {
+      "title": "Antarctica",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/antarctica-uicideboy.dfpwm",
+      "bpm": 108,
+      "theme": "waves"
+    },
+    {
+      "title": "Antidote",
+      "artist": "Travis Scott",
+      "file": "chill-vibes-2/antidote-travis-scott.dfpwm",
+      "bpm": 129,
+      "theme": "classic"
+    },
+    {
+      "title": "Ashes",
+      "artist": "Bones",
+      "file": "tens-playlist/ashes-bones.dfpwm",
+      "bpm": 129,
+      "theme": "hype"
+    },
+    {
+      "title": "Avalon",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/avalon-uicideboy.dfpwm",
+      "bpm": 152,
+      "theme": "hype"
+    },
+    {
+      "title": "AWKWARD CAR DRIVE",
+      "artist": "GERM",
+      "file": "tens-playlist/awkward-car-drive-germ.dfpwm",
+      "bpm": 83,
+      "theme": "waves"
+    },
+    {
+      "title": "Bad and Boujee",
+      "artist": "Migos",
+      "file": "tens-playlist/bad-and-boujee-migos-atl.dfpwm",
+      "bpm": 129,
+      "theme": "hype"
+    },
+    {
+      "title": "Blood. Cash.",
+      "artist": "Faceless 1-7",
+      "file": "tens-playlist/blood-cash-faceless-1-7.dfpwm",
+      "bpm": 96,
+      "theme": "waves"
+    },
+    {
+      "title": "BLOODSWEAT",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/bloodsweat-uicideboy.dfpwm",
+      "bpm": 144,
+      "theme": "hype"
+    },
+    {
+      "title": "Bones",
+      "artist": "Imagine Dragons",
+      "file": "drugs-for-pete/bones-imaginedragons.dfpwm",
+      "bpm": 112,
+      "theme": "classic"
+    },
+    {
+      "title": "Borderline",
+      "artist": "Tame Impala",
+      "file": "chill-vibes-2/borderline-tame-impala.dfpwm",
+      "bpm": 99,
+      "theme": "waves"
+    },
+    {
+      "title": "Burgundy",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/burgundy-uicideboy.dfpwm",
+      "bpm": 117,
+      "theme": "hype"
+    },
+    {
+      "title": "But Wait, There's More",
+      "artist": "Pouya",
+      "file": "tens-playlist/but-wait-there-s-more-pouya.dfpwm",
+      "bpm": 152,
+      "theme": "hype"
+    },
+    {
+      "title": "Carried Away",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/carried-away-uicideboy.dfpwm",
+      "bpm": 117,
+      "theme": "classic"
+    },
+    {
+      "title": "Casino143",
+      "artist": "ROUDS",
+      "file": "chill-vibes-2/casino143-rouds.dfpwm",
+      "bpm": 96,
+      "theme": "chill"
+    },
+    {
+      "title": "Champion of Death",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/champion-of-death-uicideboy.dfpwm",
+      "bpm": 117,
+      "theme": "hype"
+    },
+    {
+      "title": "chess (slowed)",
+      "artist": "Joyful",
+      "file": "chill-vibes-2/chess-slowed-joyful.dfpwm",
+      "bpm": 112,
+      "theme": "chill"
+    },
+    {
+      "title": "City Cook (Crackazat Remix)",
+      "artist": "Caravan Palace",
+      "file": "tens-playlist/city-cook-crackazat-remix-caravanpalace.dfpwm",
+      "bpm": 123,
+      "theme": "classic"
+    },
+    {
+      "title": "CtrlAltDelete",
+      "artist": "Bones",
+      "file": "tens-playlist/ctrlaltdelete-bones.dfpwm",
+      "bpm": 81,
+      "theme": "chill"
+    },
+    {
+      "title": "Deja Vu",
+      "artist": "Post Malone",
+      "file": "tens-playlist/deja-vu-post-malone.dfpwm",
+      "bpm": 136,
+      "theme": "classic"
+    },
+    {
+      "title": "Dracula",
+      "artist": "Tame Impala",
+      "file": "chill-vibes-2/tame-impala-dracula-lyrics-trendingtracks.dfpwm",
+      "bpm": 117,
+      "theme": "waves"
+    },
+    {
+      "title": "fast money",
+      "artist": "DREWBYRD",
+      "file": "tens-playlist/fast-money-drewbyrd.dfpwm",
+      "bpm": 123,
+      "theme": "hype"
+    },
+    {
+      "title": "Feel It",
+      "artist": "d4vd",
+      "file": "drugs-for-pete/feel-it-d4vd.dfpwm",
+      "bpm": 123,
+      "theme": "classic"
+    },
+    {
+      "title": "Feel Like That",
+      "artist": "Sublime",
+      "file": "tens-playlist/feel-like-that-sublime.dfpwm",
+      "bpm": 81,
+      "theme": "classic"
+    },
+    {
+      "title": "FEEL MY LIGHT",
+      "artist": "DMAD",
+      "file": "tens-playlist/feel-my-light-dmad.dfpwm",
+      "bpm": 96,
+      "theme": "waves"
+    },
+    {
+      "title": "Flower In A Hurricane (feat. Tame Impala, SZA, King Gizzard & the Lizard Wizard)",
+      "artist": "Justice",
+      "file": "chill-vibes-2/flower-in-a-hurricane-feat-tame-impala-sza-king-gizzard-the.dfpwm",
+      "bpm": 123,
+      "theme": "chill"
+    },
+    {
+      "title": "For the Last Time",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/for-the-last-time-uicideboy.dfpwm",
+      "bpm": 144,
+      "theme": "hype"
+    },
+    {
+      "title": "Frenzy",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/frenzy-uicideboy.dfpwm",
+      "bpm": 152,
+      "theme": "hype"
+    },
+    {
+      "title": "Fuck Ups",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/fuck-ups-uicideboy.dfpwm",
+      "bpm": 129,
+      "theme": "hype"
+    },
+    {
+      "title": "Gangstalker",
+      "artist": "Sublime",
+      "file": "tens-playlist/gangstalker-sublime.dfpwm",
+      "bpm": 99,
+      "theme": "waves"
+    },
+    {
+      "title": "Gimme a Second",
+      "artist": "Saliva Grey",
+      "file": "tens-playlist/gimme-a-second-saliva-grey.dfpwm",
+      "bpm": 152,
+      "theme": "hype"
+    },
+    {
+      "title": "GO DO IT #jerseyclub",
+      "artist": "Ziah150",
+      "file": "chill-vibes-2/go-do-it-jerseyclub-ziah150.dfpwm",
+      "bpm": 123,
+      "theme": "waves"
+    },
+    {
+      "title": "Go Flex",
+      "artist": "Post Malone",
+      "file": "tens-playlist/go-flex-post-malone.dfpwm",
+      "bpm": 83,
+      "theme": "chill"
+    },
+    {
+      "title": "goosebumps",
+      "artist": "Travis Scott",
+      "file": "tens-playlist/goosebumps-travis-scott.dfpwm",
+      "bpm": 129,
+      "theme": "hype"
+    },
+    {
+      "title": "GRAILED",
+      "artist": "1nonly",
+      "file": "tens-playlist/grailed-1nonly.dfpwm",
+      "bpm": 136,
+      "theme": "hype"
+    },
+    {
+      "title": "GREY+GREY+GREY",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/uicideboy-grey-grey-grey-lyric-video-uicideboy.dfpwm",
+      "bpm": 144,
+      "theme": "hype"
+    },
+    {
+      "title": "Hate.",
+      "artist": "ThxSoMch",
+      "file": "tens-playlist/hate-thxsomch.dfpwm",
+      "bpm": 96,
+      "theme": "classic"
+    },
+    {
+      "title": "HDMI",
+      "artist": "Bones",
+      "file": "tens-playlist/hdmi-bones.dfpwm",
+      "bpm": 123,
+      "theme": "chill"
+    },
+    {
+      "title": "HellInACell",
+      "artist": "Bones",
+      "file": "tens-playlist/hellinacell-bones.dfpwm",
+      "bpm": 144,
+      "theme": "hype"
+    },
+    {
+      "title": "How It's Done (from the Netflix film KPop Demon Hunters)",
+      "artist": "HUNTRX",
+      "file": "tens-playlist/how-its-done-from-the-netflix-film-kpop-demon-hunters-huntrx.dfpwm",
+      "bpm": 161,
+      "theme": "hype"
+    },
+    {
+      "title": "Hypernormalisation",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/hypernormalisation-uicideboy.dfpwm",
+      "bpm": 152,
+      "theme": "hype"
+    },
+    {
+      "title": "i can see clearly",
+      "artist": "Lil Darkie",
+      "file": "chill-vibes-2/i-can-see-clearly-lil-darkie.dfpwm",
+      "bpm": 92,
+      "theme": "chill"
+    },
+    {
+      "title": "I Ended up Driving the Camaro off the Causeway Bridge",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/i-ended-up-driving-the-camaro-off-the-causeway-bridge-uicide.dfpwm",
+      "bpm": 136,
+      "theme": "hype"
+    },
+    {
+      "title": "I Just Might",
+      "artist": "Bruno Mars",
+      "file": "tens-playlist/i-just-might-bruno-mars.dfpwm",
+      "bpm": 103,
+      "theme": "classic"
+    },
+    {
+      "title": "I WANNA BE",
+      "artist": "Lil Darkie",
+      "file": "tens-playlist/i-wanna-be-lil-darkie.dfpwm",
+      "bpm": 112,
+      "theme": "hype"
+    },
+    {
+      "title": "In Constant Sorrow",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/in-constant-sorrow-uicideboy.dfpwm",
+      "bpm": 129,
+      "theme": "hype"
+    },
+    {
+      "title": "Just Jammin'",
+      "artist": "Gramatik",
+      "file": "tens-playlist/just-jammin-gramatik.dfpwm",
+      "bpm": 89,
+      "theme": "waves"
+    },
+    {
+      "title": "Keep It Tucked",
+      "artist": "ThxSoMch",
+      "file": "tens-playlist/keep-it-tucked-thxsomch.dfpwm",
+      "bpm": 89,
+      "theme": "waves"
+    },
+    {
+      "title": "Leave",
+      "artist": "Post Malone",
+      "file": "tens-playlist/leave-post-malone.dfpwm",
+      "bpm": 89,
+      "theme": "rain"
+    },
+    {
+      "title": "Leviticus",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/uicideboy-leviticus-lyric-video-uicideboy.dfpwm",
+      "bpm": 92,
+      "theme": "classic"
+    },
+    {
+      "title": "Life Force (Virtuoso Version)",
+      "artist": "RJ Pasin",
+      "file": "tens-playlist/life-force-virtuoso-version-rj-pasin.dfpwm",
+      "bpm": 123,
+      "theme": "chill"
+    },
+    {
+      "title": "Location",
+      "artist": "Khalid",
+      "file": "tens-playlist/location-khalid.dfpwm",
+      "bpm": 80,
+      "theme": "chill"
+    },
+    {
+      "title": "Lone Wolf Hysteria",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/lone-wolf-hysteria-uicideboy.dfpwm",
+      "bpm": 108,
+      "theme": "classic"
+    },
+    {
+      "title": "Lonely Lonely (I Guess I'm Lonely)",
+      "artist": "unshackled",
+      "file": "chill-vibes-2/unshackled-lonely-lonely-i-guess-i-m-lonely-unshackled.dfpwm",
+      "bpm": 129,
+      "theme": "classic"
+    },
+    {
+      "title": "Matte Black",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/matte-black-uicideboy.dfpwm",
+      "bpm": 152,
+      "theme": "hype"
+    },
+    {
+      "title": "Memoirs of a Gorilla",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/memoirs-of-a-gorilla-uicideboy.dfpwm",
+      "bpm": 112,
+      "theme": "hype"
+    },
+    {
+      "title": "Mental Clarity Is a Luxury I Can't Afford",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/mental-clarity-is-a-luxury-i-can-t-afford-uicideboy.dfpwm",
+      "bpm": 83,
+      "theme": "waves"
+    },
+    {
+      "title": "methamphetamine blues",
+      "artist": "Scrim",
+      "file": "tens-playlist/methamphetamine-blues-scrim.dfpwm",
+      "bpm": 103,
+      "theme": "classic"
+    },
+    {
+      "title": "MONEY ON THE DASH",
+      "artist": "Elley Duhe",
+      "file": "tens-playlist/money-on-the-dash-elley-duh.dfpwm",
+      "bpm": 117,
+      "theme": "hype"
+    },
+    {
+      "title": "Monochromatic",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/monochromatic-uicideboy.dfpwm",
+      "bpm": 103,
+      "theme": "waves"
+    },
+    {
+      "title": "Moon Palace",
+      "artist": "Stick Figure",
+      "file": "chill-vibes-2/moon-palace-stick-figure.dfpwm",
+      "bpm": 83,
+      "theme": "waves"
+    },
+    {
+      "title": "Moonrock (Acoustic)",
+      "artist": "Bryce Vine",
+      "file": "chill-vibes-2/moonrock-acoustic-bryce-vine.dfpwm",
+      "bpm": 152,
+      "theme": "hype"
+    },
+    {
+      "title": "Napoleon",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/napoleon-uicideboy.dfpwm",
+      "bpm": 99,
+      "theme": "classic"
+    },
+    {
+      "title": "Natural Mystic",
+      "artist": "Stick Figure",
+      "file": "tens-playlist/natural-mystic-stick-figure.dfpwm",
+      "bpm": 129,
+      "theme": "chill"
+    },
+    {
+      "title": "Nightmare on Peachtree Street",
+      "artist": "Yung Gravy",
+      "file": "tens-playlist/nightmare-on-peachtree-street-yung-gravy.dfpwm",
+      "bpm": 123,
+      "theme": "hype"
+    },
+    {
+      "title": "Nirvana",
+      "artist": "Sickick",
+      "file": "tens-playlist/nirvana-sickickmusic.dfpwm",
+      "bpm": 112,
+      "theme": "hype"
+    },
+    {
+      "title": "Now and at the Hour of Our Death (feat. BONES)",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/now-and-at-the-hour-of-our-death-feat-bones-uicideboy.dfpwm",
+      "bpm": 144,
+      "theme": "hype"
+    },
+    {
+      "title": "Nuthin' But A G Thang",
+      "artist": "Dr. Dre",
+      "file": "tens-playlist/nuthin-but-a-g-thang-dr-dre.dfpwm",
+      "bpm": 96,
+      "theme": "classic"
+    },
+    {
+      "title": "Old Addicts, New Habits",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/old-addicts-new-habits-uicideboy.dfpwm",
+      "bpm": 152,
+      "theme": "hype"
+    },
+    {
+      "title": "Oxygen",
+      "artist": "Dirty Heads",
+      "file": "tens-playlist/oxygen-dirty-heads.dfpwm",
+      "bpm": 86,
+      "theme": "waves"
+    },
+    {
+      "title": "Paris",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/paris-uicideboy.dfpwm",
+      "bpm": 108,
+      "theme": "hype"
+    },
+    {
+      "title": "Poydras (feat. $uicideboy$)",
+      "artist": "CHETTA",
+      "file": "tens-playlist/poydras-feat-uicideboy-chetta.dfpwm",
+      "bpm": 99,
+      "theme": "waves"
+    },
+    {
+      "title": "Preach",
+      "artist": "Saint Motel",
+      "file": "tens-playlist/preach-saint-motel.dfpwm",
+      "bpm": 117,
+      "theme": "classic"
+    },
+    {
+      "title": "PULLING UP (feat. $uicideboy$)",
+      "artist": "GERM",
+      "file": "tens-playlist/pulling-up-feat-uicideboy-germ.dfpwm",
+      "bpm": 123,
+      "theme": "hype"
+    },
+    {
+      "title": "Railroad Shelter",
+      "artist": "TJ O'Neill",
+      "file": "tens-playlist/railroad-shelter-tj-o-neill.dfpwm",
+      "bpm": 144,
+      "theme": "hype"
+    },
+    {
+      "title": "Rocks",
+      "artist": "Bones",
+      "file": "tens-playlist/rocks-bones.dfpwm",
+      "bpm": 83,
+      "theme": "chill"
+    },
+    {
+      "title": "Santeria",
+      "artist": "Sublime",
+      "file": "tens-playlist/santeria-sublime.dfpwm",
+      "bpm": 92,
+      "theme": "classic"
+    },
+    {
+      "title": "SARCOPHAGUS III",
+      "artist": "$uicideboy$ x Ramirez",
+      "file": "tens-playlist/uicideboy-x-ramirez-sarcophagus-iii-trillphonk.dfpwm",
+      "bpm": 123,
+      "theme": "hype"
+    },
+    {
+      "title": "Self-Inflicted",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/self-inflicted-uicideboy.dfpwm",
+      "bpm": 144,
+      "theme": "hype"
+    },
+    {
+      "title": "SHAME",
+      "artist": "Eluzai",
+      "file": "tens-playlist/shame-eluzai.dfpwm",
+      "bpm": 96,
+      "theme": "hype"
+    },
+    {
+      "title": "Six Lines, Two Dragons, and a Messiah",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/six-lines-two-dragons-and-a-messiah-uicideboy.dfpwm",
+      "bpm": 112,
+      "theme": "classic"
+    },
+    {
+      "title": "Slow Song Freestyle",
+      "artist": "Emcee",
+      "file": "chill-vibes-2/slow-song-freestyle-emcee.dfpwm",
+      "bpm": 96,
+      "theme": "hype"
+    },
+    {
+      "title": "Smoke Two Joints",
+      "artist": "Sublime",
+      "file": "tens-playlist/smoke-two-joints-sublime.dfpwm",
+      "bpm": 96,
+      "theme": "classic"
+    },
+    {
+      "title": "SPIT IN MY FACE!",
+      "artist": "ThxSoMch",
+      "file": "tens-playlist/spit-in-my-face-thxsomch.dfpwm",
+      "bpm": 96,
+      "theme": "classic"
+    },
+    {
+      "title": "squabble up",
+      "artist": "Kendrick Lamar",
+      "file": "tens-playlist/squabble-up-kendrick-lamar.dfpwm",
+      "bpm": 103,
+      "theme": "hype"
+    },
+    {
+      "title": "The Big Goodbye",
+      "artist": "Release",
+      "file": "tens-playlist/the-big-goodbye-release.dfpwm",
+      "bpm": 92,
+      "theme": "chill"
+    },
+    {
+      "title": "THE SCOTTS",
+      "artist": "THE SCOTTS",
+      "file": "tens-playlist/the-scotts-the-scotts.dfpwm",
+      "bpm": 129,
+      "theme": "classic"
+    },
+    {
+      "title": "The Stand",
+      "artist": "Mother Mother",
+      "file": "drugs-for-pete/the-stand-mother-mother.dfpwm",
+      "bpm": 117,
+      "theme": "classic"
+    },
+    {
+      "title": "The Thin Grey Line",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/the-thin-grey-line-uicideboy.dfpwm",
+      "bpm": 144,
+      "theme": "hype"
+    },
+    {
+      "title": "The Wave",
+      "artist": "Jungle4eva",
+      "file": "tens-playlist/the-wave-jungle4eva.dfpwm",
+      "bpm": 123,
+      "theme": "waves"
+    },
+    {
+      "title": "Thorns",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/thorns-uicideboy.dfpwm",
+      "bpm": 108,
+      "theme": "hype"
+    },
+    {
+      "title": "Transgressions",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/transgressions-uicideboy.dfpwm",
+      "bpm": 144,
+      "theme": "classic"
+    },
+    {
+      "title": "UCHIHA",
+      "artist": "Eluzai",
+      "file": "tens-playlist/uchiha-eluzai.dfpwm",
+      "bpm": 96,
+      "theme": "hype"
+    },
+    {
+      "title": "Ugliest",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/ugliest-uicideboy.dfpwm",
+      "bpm": 86,
+      "theme": "waves"
+    },
+    {
+      "title": "Us Vs. Them",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/us-vs-them-uicideboy.dfpwm",
+      "bpm": 152,
+      "theme": "hype"
+    },
+    {
+      "title": "Watch This (ARIZONATEARS Pluggnb Remix)",
+      "artist": "Lil Uzi Vert",
+      "file": "tens-playlist/watch-this-arizonatears-pluggnb-remix-lil-uzi-vert.dfpwm",
+      "bpm": 129,
+      "theme": "hype"
+    },
+    {
+      "title": "What the Fuck is Happening",
+      "artist": "$uicideboy$",
+      "file": "tens-playlist/what-the-fuck-is-happening-uicideboy.dfpwm",
+      "bpm": 144,
+      "theme": "hype"
+    },
+    {
+      "title": "Woah",
+      "artist": "GOTOU",
+      "file": "tens-playlist/woah-gotou.dfpwm",
+      "bpm": 144,
+      "theme": "hype"
+    },
+    {
+      "title": "Your Idol",
+      "artist": "Saja Boys",
+      "file": "tens-playlist/your-idol-saja-boys.dfpwm",
+      "bpm": 89,
+      "theme": "waves"
+    }
   ]
 }
