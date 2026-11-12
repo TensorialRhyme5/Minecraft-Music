@@ -47,7 +47,7 @@ local PAL = {
   [colors.lightBlue] = 0x38c6ff,
   [colors.cyan]      = 0x7fc8ff, -- day sky
   [colors.purple]    = 0x0e1a4a, -- night sky
-  [colors.orange]    = 0xff8a3d, -- sunrise / sunset
+  [colors.orange]    = 0xd8904a, -- sunrise / sunset + wood planks
   [colors.pink]      = 0x7a4a24, -- brown (wood, dirt, doors)
   [colors.green]     = 0x3f9b2f, -- grass
   [colors.yellow]    = 0xffd23f,
@@ -677,34 +677,46 @@ local function drawScene(t, mc, x1, y1, cw, ch)
     rect(cx + 1, c.y + 2, cx + c.w - 2, c.y + 2, cloudCol)
   end
 
-  -- hill
-  local hcx, hrx, hh = math.floor(PW * 0.76), math.floor(PW * 0.34), math.floor(gy * 0.38)
-  for x = hcx - hrx, hcx + hrx do
-    local f = (x - hcx) / hrx
-    local d = math.floor(hh * math.sqrt(math.max(0, 1 - f * f)) + 0.5)
-    for y = gy - d, gy - 1 do put(x, y, DKGREEN) end
+  -- hill: stepped blocks, grass on top, dirt below
+  local hcx, hrx, hh = math.floor(PW * 0.8), math.floor(PW * 0.24), math.floor(gy * 0.5)
+  for bx = hcx - hrx - 1, hcx + hrx + 1, 3 do
+    local f = math.abs(bx + 1 - hcx) / hrx
+    local d = math.floor(hh * (1 - f) ^ 0.8 / 2 + 0.5) * 2
+    if d > 0 then
+      rect(bx, gy - d, bx + 2, gy - 1, BROWN)
+      rect(bx, gy - d, bx + 2, gy - d, GRASS)
+    end
   end
 
   -- ground
   rect(1, gy, PW, gy, GRASS)
   rect(1, gy + 1, PW, PH, BROWN)
 
-  -- house (stone walls, red roof)
+  -- wooden house: log corners, plank walls, cobble base, stepped roof
   local hx = 3
   local hw = 14
-  rect(hx, gy - 8, hx + hw - 1, gy - 1, LGRAY)
-  for i = 0, 5 do rect(hx - 1 + i, gy - 9 - i, hx + hw - i, gy - 9 - i, RED) end
+  rect(hx, gy - 8, hx + hw - 1, gy - 2, ORANGE)              -- planks
+  rect(hx, gy - 1, hx + hw - 1, gy - 1, LGRAY)               -- cobblestone base
+  rect(hx, gy - 9, hx + hw - 1, gy - 9, BROWN)               -- top log beam
+  rect(hx, gy - 9, hx + 1, gy - 1, BROWN)                    -- log corners
+  rect(hx + hw - 2, gy - 9, hx + hw - 1, gy - 1, BROWN)
+  for i = 0, 3 do                                            -- stepped roof
+    rect(hx - 1 + i * 2, gy - 10 - i, hx + hw - i * 2, gy - 10 - i, BROWN)
+  end
   local doorX = hx + 3
   rect(doorX, gy - 4, doorX + 1, gy - 1, BROWN)
+  put(doorX + 1, gy - 3, YELLOW)                              -- door knob
   local lightOn = mc >= 18 or mc < 6.5 or (storm and SC.res.state == "inside")
-  rect(hx + 8, gy - 6, hx + 10, gy - 5, lightOn and YELLOW or BLACK)
+  rect(hx + 8, gy - 7, hx + 10, gy - 5, lightOn and YELLOW or LBLUE)   -- glass window
 
-  -- tree
-  local tx = hx + hw + 7
-  rect(tx, gy - 6, tx + 1, gy - 1, BROWN)
-  for y = -5, 4 do for x = -5, 5 do
-    if x * x + (y * 1.3) ^ 2 <= 22 then put(tx + 0.5 + x, gy - 10 + y, GRASS) end
-  end end
+  -- blocky oak tree
+  local tx = hx + hw + 8
+  rect(tx, gy - 7, tx + 1, gy - 1, BROWN)
+  local function leaves(xa, ya, xb, yb)
+    for y = ya, yb do for x = xa, xb do put(x, y, ((x * 3 + y * 7) % 5 == 0) and GRASS or DKGREEN) end end
+  end
+  leaves(tx - 4, gy - 10, tx + 5, gy - 8)
+  leaves(tx - 2, gy - 12, tx + 3, gy - 11)
 
   -- resident: out during the day, home at night or when it rains
   local R = SC.res
