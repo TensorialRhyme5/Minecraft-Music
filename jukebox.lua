@@ -285,7 +285,38 @@ local function initStars()
   end
 end
 
+local theme            -- defined with the background themes further down
+local warpStars = {}
+local function drawWarpStars(dt, boost)
+  local cx, cy = (L.rx1 + L.rx2) / 2, H / 2
+  if #warpStars == 0 then
+    for i = 1, 130 do warpStars[i] = { a = math.random() * 2 * math.pi, d = math.random() * 40 } end
+  end
+  for _, s in ipairs(warpStars) do
+    s.d = s.d + (1.5 + s.d * 1.4) * dt * boost
+    local x = math.floor(cx + math.cos(s.a) * s.d * 1.6 + 0.5)
+    local y = math.floor(cy + math.sin(s.a) * s.d + 0.5)
+    if x < L.rx1 or x > W or y < 1 or y > H then
+      s.a, s.d = math.random() * 2 * math.pi, math.random() * 2
+    else
+      local tx = math.floor(cx + math.cos(s.a) * (s.d - 1.2) * 1.6 + 0.5)
+      local ty = math.floor(cy + math.sin(s.a) * (s.d - 1.2) + 0.5)
+      if s.d < 6 then setCell(x, y, ".", GRAY)
+      elseif s.d < 14 then setCell(tx, ty, ".", GRAY); setCell(x, y, G_DOT, LGRAY)
+      else
+        local ux = math.floor(cx + math.cos(s.a) * (s.d - 2.6) * 1.6 + 0.5)
+        local uy = math.floor(cy + math.sin(s.a) * (s.d - 2.6) + 0.5)
+        setCell(ux, uy, ".", GRAY); setCell(tx, ty, G_DOT, GRAY); setCell(x, y, "*", WHITE)
+      end
+    end
+  end
+end
+
 local function drawStars(dt, boost)
+  local th = theme()
+  if th.stars == "none" then return end
+  if th.stars == "warp" then drawWarpStars(dt, boost); return end
+  boost = boost * (th.starSpeed or 1)
   for _, s in ipairs(stars) do
     s.y = s.y + STAR_SPEED[s.l] * dt * boost
     if s.y >= H + 2 then s.y = -math.random() * 3; s.x = math.random(1, W) end
@@ -492,7 +523,7 @@ local function loadPlaylists()
         local a, b = title:match("^(.*) %- (.-)$")
         if a then title, artist = a, b else artist = "" end
       end
-      out[#out + 1] = { title = clean(title), artist = clean(artist), file = s.file }
+      out[#out + 1] = { title = clean(title), artist = clean(artist), file = s.file, bpm = tonumber(s.bpm) }
     end
     if #out > 0 then list[#list + 1] = { name = clean(name), songs = out } end
   end
@@ -663,6 +694,7 @@ local function drawTitle(t)
     else
       info = (S.paused and "PAUSED" or "SHUFFLE") .. sep .. S.lists[S.pl].name .. sep .. S.qi .. "/" .. #S.queue
     end
+    if S.song.bpm then info = info .. sep .. S.song.bpm .. " BPM" end
     if #S.upNext > 0 then info = info .. sep .. #S.upNext .. " queued" end
     col = S.paused and YELLOW or MAGENTA
   else info, col = "", GRAY end
@@ -681,6 +713,39 @@ local BG_SCHEMES = {
   { 0x1e5030, 0x10281a, 0x266a3c },   -- green
   { 0x3a2a6a, 0x1c1638, 0x4a3682 },   -- purple
 }
+-- Background themes. Pick one per playlist with THEME_FOR (playlist name -> theme name).
+local THEMES = {
+  classic = { effect = "shape", shapes = { 1, 2, 3, 4, 5, 6 }, tints = BG_SCHEMES, stars = "fall", starSpeed = 1,
+              beat = 1, rings = true, hold = 6, morph = 2, spin = 1 },
+  chill   = { effect = "shape", shapes = { 3, 5, 2 }, stars = "fall", starSpeed = 0.5, beat = 0.5, rings = false,
+              hold = 9, morph = 3, spin = 0.6,
+              tints = { { 0x24406a, 0x142236, 0x2c5280 }, { 0x3a2a6a, 0x1c1638, 0x4a3682 }, { 0x1a4a50, 0x0e2628, 0x22606a } } },
+  hype    = { effect = "shape", shapes = { 1, 6, 2 }, stars = "warp", starSpeed = 1, beat = 1.6, rings = true,
+              hold = 3, morph = 1, spin = 1.6,
+              tints = { { 0x6a2020, 0x351010, 0x803030 }, { 0x6a5218, 0x352a0c, 0x806420 }, { 0x6a3a14, 0x351c0a, 0x80481a } } },
+  rain    = { effect = "rain", stars = "none", beat = 0.8,
+              tints = { { 0x2a4a6a, 0x16263a, 0x346080 }, { 0x1e4a5a, 0x10262e, 0x286070 } } },
+  waves   = { effect = "waves", stars = "fall", starSpeed = 0.4, beat = 1.2,
+              tints = { { 0x5a2456, 0x2c1630, 0x3a2a6a }, { 0x3a2a6a, 0x1c1638, 0x24406a } } },
+}
+-- Each song's BPM (measured ahead of time, stored in playlists.json) picks its background.
+local BPM_THEMES = {
+  { 85, "rain" },      -- under 85 BPM: slow / slowed + reverb
+  { 105, "chill" },    -- 85-104
+  { 125, "waves" },    -- 105-124
+  { 140, "classic" },  -- 125-139
+  { math.huge, "hype" },
+}
+local THEME_FOR = {}     -- optional per-playlist override, e.g. THEME_FOR["Chill Vibes 2.0"] = "chill"
+theme = function()
+  local name = _G.__THEME
+  if not name and S.pl and S.lists then name = THEME_FOR[S.lists[S.pl].name] end
+  if not name and S.song and S.song.bpm then
+    for _, r in ipairs(BPM_THEMES) do if S.song.bpm < r[1] then name = r[2]; break end end
+  end
+  return THEMES[name or "classic"] or THEMES.classic
+end
+
 local function beatTick(t)
   local playing = S.data and not S.paused and not S.loading
   local bass = 0
@@ -688,7 +753,7 @@ local function beatTick(t)
   local beat = playing and bass > 0.3 and bass > BT.avg * 1.25 + 0.05 and t - BT.last > 0.25
   if beat then
     BT.last = t
-    BT.scheme = BT.scheme % #BG_SCHEMES + 1
+    BT.scheme = BT.scheme % #theme().tints + 1
     BT.rings[#BT.rings + 1] = t
     if #BT.rings > 3 then table.remove(BT.rings, 1) end
   end
@@ -757,57 +822,97 @@ end
 local BG_HOLD, BG_MORPH = 6, 2
 local bgMorph = { from = 1, to = 1, start = -100, nextAt = 0 }
 
-local function drawBackShape(t, dt)
-  local x1, y1 = L.rx1, 1                 -- the whole right-hand (red box) area
-  local cw, ch = L.rw, H
-  local pw, ph = cw * 2, ch * 3
-  if bgMorph.nextAt == 0 then bgMorph.nextAt = t + BG_HOLD end
-  if t >= bgMorph.nextAt then
-    bgMorph.from, bgMorph.to = bgMorph.to, bgMorph.to % #BG_SHAPES + 1
-    bgMorph.start, bgMorph.nextAt = t, t + BG_MORPH + BG_HOLD
-  end
-  local f = clamp((t - bgMorph.start) / BG_MORPH, 0, 1)
-  local e = f * f * (3 - 2 * f)
-  local A, B = BG_SHAPES[bgMorph.from], BG_SHAPES[bgMorph.to]
-  local pulse = math.exp(-(t - BT.last) * 6)
-  BT.spin = BT.spin + BT.bass * 1.2 * dt
-  local spin = t * 0.6 + BT.spin
-  local cx, sx, cy, sy = math.cos(spin * 0.9), math.sin(spin * 0.9), math.cos(spin * 1.3), math.sin(spin * 1.3)
-  local scale = math.min(pw, ph) * 0.42 * 3.2 * (1 + 0.12 * math.sin(f * math.pi)) * (1 + 0.1 * pulse + 0.05 * BT.bass)
+local rainDrops = {}
+local function backgroundPixels(t, dt, th, pw, ph, pulse)
   local pix = {}
-  for i = 1, BG_NP do
-    local a, b = A[i], B[i]
-    local x = a[1] + (b[1] - a[1]) * e
-    local y = a[2] + (b[2] - a[2]) * e
-    local z = a[3] + (b[3] - a[3]) * e
-    y, z = y * cx - z * sx, y * sx + z * cx
-    x, z = x * cy + z * sy, -x * sy + z * cy
-    local d = z + 3.2
-    local px = math.floor(pw / 2 + x * scale / d + 0.5)
-    local py = math.floor(ph / 2 + y * scale / d + 0.5)
+  local function plot(px, py, z)
+    px, py = math.floor(px + 0.5), math.floor(py + 0.5)
     if px >= 0 and py >= 0 and px < pw and py < ph then
       local k = py * pw + px
       if not pix[k] or z < pix[k] then pix[k] = z end
     end
   end
-  for _, rt in ipairs(BT.rings) do                       -- faint rings on the beat
-    local age = t - rt
-    if age < 0.6 then
-      local rad = math.min(pw, ph) * (0.3 + age * 1.2)
-      for a = 0, 239 do
-        local ang = a / 240 * 2 * math.pi
-        local px = math.floor(pw / 2 + math.cos(ang) * rad * 1.15 + 0.5)
-        local py = math.floor(ph / 2 + math.sin(ang) * rad + 0.5)
-        if px >= 0 and py >= 0 and px < pw and py < ph then
-          local k = py * pw + px
-          if not pix[k] then pix[k] = 10 end
+  local beat = th.beat or 1
+  if th.effect == "waves" then
+    -- three soft waves whose height follows the bass
+    for w = 0, 2 do
+      local amp = ph * 0.07 * (1 + beat * (BT.bass * 2 + pulse))
+      local base = ph * (0.32 + 0.18 * w)
+      for x = 0, pw - 1 do
+        local y = base + amp * math.sin(x * 0.045 * (1 + w * 0.35) + t * (1.1 + w * 0.5) + w * 2)
+        plot(x, y, w == 0 and -1 or (w == 1 and 1 or 10))
+      end
+    end
+  elseif th.effect == "rain" then
+    -- diagonal streaks; heavier and faster on loud parts
+    if #rainDrops == 0 then
+      for n = 1, 110 do rainDrops[n] = { x = math.random() * pw, y = math.random() * ph, near = math.random() < 0.4 } end
+    end
+    local speed = 55 * (1 + beat * (BT.bass * 1.5 + pulse * 0.5))
+    for _, d in ipairs(rainDrops) do
+      local v = d.near and speed * 1.4 or speed
+      d.y = d.y + v * dt; d.x = d.x - v * 0.35 * dt
+      if d.y > ph or d.x < 0 then d.y = -math.random() * 10; d.x = math.random() * (pw + 20) end
+      local len = d.near and 5 or 3
+      for q = 0, len - 1 do plot(d.x + q * 0.35, d.y - q, d.near and -1 or 1) end
+    end
+  else
+    -- warping wireframe shape
+    local list = th.shapes or { 1, 2, 3, 4, 5, 6 }
+    if bgMorph.list ~= list then bgMorph.list, bgMorph.i, bgMorph.from, bgMorph.to, bgMorph.start, bgMorph.nextAt = list, 1, list[1], list[1], -100, 0 end
+    local hold, morphT = th.hold or BG_HOLD, th.morph or BG_MORPH
+    if bgMorph.nextAt == 0 then bgMorph.nextAt = t + hold end
+    if t >= bgMorph.nextAt then
+      bgMorph.i = bgMorph.i % #list + 1
+      bgMorph.from, bgMorph.to = bgMorph.to, list[bgMorph.i]
+      bgMorph.start, bgMorph.nextAt = t, t + morphT + hold
+    end
+    local f = clamp((t - bgMorph.start) / morphT, 0, 1)
+    local e = f * f * (3 - 2 * f)
+    local A, B = BG_SHAPES[bgMorph.from], BG_SHAPES[bgMorph.to]
+    BT.spin = BT.spin + BT.bass * 1.2 * beat * dt
+    local spin = t * 0.6 * (th.spin or 1) + BT.spin
+    local cx, sx, cy, sy = math.cos(spin * 0.9), math.sin(spin * 0.9), math.cos(spin * 1.3), math.sin(spin * 1.3)
+    local scale = math.min(pw, ph) * 0.42 * 3.2 * (1 + 0.12 * math.sin(f * math.pi)) * (1 + beat * (0.1 * pulse + 0.05 * BT.bass))
+    for i = 1, BG_NP do
+      local a, b = A[i], B[i]
+      local x = a[1] + (b[1] - a[1]) * e
+      local y = a[2] + (b[2] - a[2]) * e
+      local z = a[3] + (b[3] - a[3]) * e
+      y, z = y * cx - z * sx, y * sx + z * cx
+      x, z = x * cy + z * sy, -x * sy + z * cy
+      local d = z + 3.2
+      plot(pw / 2 + x * scale / d, ph / 2 + y * scale / d, z)
+    end
+  end
+  if th.rings then
+    for _, rt in ipairs(BT.rings) do
+      local age = t - rt
+      if age < 0.6 then
+        local rad = math.min(pw, ph) * (0.3 + age * 1.2)
+        for a = 0, 239 do
+          local ang = a / 240 * 2 * math.pi
+          local px = math.floor(pw / 2 + math.cos(ang) * rad * 1.15 + 0.5)
+          local py = math.floor(ph / 2 + math.sin(ang) * rad + 0.5)
+          if px >= 0 and py >= 0 and px < pw and py < ph and not pix[py * pw + px] then pix[py * pw + px] = 10 end
         end
       end
     end
   end
+  return pix
+end
+
+local function drawBackShape(t, dt)
+  local x1, y1 = L.rx1, 1                 -- the whole right-hand (red box) area
+  local cw, ch = L.rw, H
+  local pw, ph = cw * 2, ch * 3
+  local th = theme()
+  local pulse = math.exp(-(t - BT.last) * 6)
+  local pix = backgroundPixels(t, dt, th, pw, ph, pulse)
   -- palette: dim tints, a little brighter right on the beat
-  local sc = BG_SCHEMES[BT.scheme]
-  local k = 1 + 0.5 * pulse
+  local tints = th.tints or BG_SCHEMES
+  local sc = tints[(BT.scheme - 1) % #tints + 1]
+  local k = 1 + 0.5 * pulse * (th.beat or 1)
   for _, m in ipairs(mons) do
     m.p.setPaletteColour(2 ^ 1, mix(sc[1], k))
     m.p.setPaletteColour(2 ^ 6, mix(sc[2], k))
