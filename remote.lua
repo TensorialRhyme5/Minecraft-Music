@@ -738,11 +738,10 @@ local function drawScene(t, mc, x1, y1, cw, ch)
   rect(tx, b4 + 3, tx + 3, gy - 1, BROWN)                      -- 4-pixel-wide trunk
   -- blocky canopy traced from Bryan's sketch (each row = one 3-pixel block row, x offsets from the trunk)
   local rows = {
-    { b4 - 9, tx - 2, tx + 7 },    -- top, a little right of centre
-    { b4 - 6, tx - 6, tx + 9 },    -- widest
-    { b4 - 3, tx - 6, tx + 9 },
-    { b4,     tx - 6, tx + 7 },    -- lower right tucks in
-    { b4 + 3, tx - 4, tx + 5 },    -- bottom lump over the trunk
+    { b4 - 6, tx - 2, tx + 7 },    -- top, a little right of centre (one block below the roof peak)
+    { b4 - 3, tx - 6, tx + 9 },    -- widest
+    { b4,     tx - 6, tx + 9 },
+    { b4 + 3, tx - 4, tx + 7 },    -- lower right tucks in, bottom lump over the trunk
   }
   for _, r in ipairs(rows) do
     for y = r[1], r[1] + 2 do
