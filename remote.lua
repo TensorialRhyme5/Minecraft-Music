@@ -590,7 +590,7 @@ local SPR = {
   shambler = { ".dd", "777", ".7.", "b.b" },
   skeleton = { ".88", "000", ".8.", "8.8" },
   spider   = { "f.f.f", ".fffe", "f.f.f" },
-  resident = { "3333", "3d33", "3303", "ffff", "ffff", "7777" },  -- light blue w/ green + white specks, black pants, gray feet
+  resident = { "33", "3d", "33", "ff", "ff", "77" },  -- light blue w/ green speck, black pants, gray feet
 }
 local DAY_MOBS = { "sheep", "cow", "chicken" }
 local NIGHT_MOBS = { "shambler", "skeleton", "spider" }
