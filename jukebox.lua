@@ -670,6 +670,165 @@ local function drawTitle(t)
   text(x0 + math.floor((iw - #info) / 2), L.ty1 + 3, info, col, PANEL)
 end
 
+-- ---------------------------------------------------------- dim 3D shape behind the right-hand area
+-- Uses the 3 colour slots the jukebox doesn't otherwise need (orange, pink, cyan) set to dark tints.
+local BT = { bass = 0, beat = false, avg = 0, last = -10, scheme = 1, rings = {}, spin = 0 }
+local BG_NEAR, BG_FAR, BG_RING = "1", "6", "9"
+local BG_SCHEMES = {
+  { 0x24406a, 0x142236, 0x2c5280 },   -- blue
+  { 0x562450, 0x2a1428, 0x6a2c60 },   -- magenta
+  { 0x584618, 0x2a2210, 0x6a5622 },   -- gold
+  { 0x1e5030, 0x10281a, 0x266a3c },   -- green
+  { 0x3a2a6a, 0x1c1638, 0x4a3682 },   -- purple
+}
+local function beatTick(t)
+  local playing = S.data and not S.paused and not S.loading
+  local bass = 0
+  if playing then bass = (levels[1] + levels[2] + levels[3] + levels[4]) / 4 end
+  local beat = playing and bass > 0.3 and bass > BT.avg * 1.25 + 0.05 and t - BT.last > 0.25
+  if beat then
+    BT.last = t
+    BT.scheme = BT.scheme % #BG_SCHEMES + 1
+    BT.rings[#BT.rings + 1] = t
+    if #BT.rings > 3 then table.remove(BT.rings, 1) end
+  end
+  BT.avg = BT.avg * 0.85 + bass * 0.15
+  BT.bass, BT.beat = bass, beat
+end
+
+local function mix(c, k)   -- brighten a 0xRRGGBB colour by factor k
+  local r, g, b = math.floor(c / 65536), math.floor(c / 256) % 256, c % 256
+  return math.min(255, math.floor(r * k)) * 65536 + math.min(255, math.floor(g * k)) * 256 + math.min(255, math.floor(b * k))
+end
+
+local BG_NP = 1000
+local BG_SHAPES = {}
+do
+  local PHI = (1 + math.sqrt(5)) / 2
+  local function norm(pts)
+    local r = 0
+    for _, v in ipairs(pts) do r = math.max(r, math.sqrt(v[1] ^ 2 + v[2] ^ 2 + v[3] ^ 2)) end
+    for _, v in ipairs(pts) do v[1], v[2], v[3] = v[1] / r, v[2] / r, v[3] / r end
+    table.sort(pts, function(a, b) return math.atan2(a[3], a[1]) + a[2] * 0.01 < math.atan2(b[3], b[1]) + b[2] * 0.01 end)
+    return pts
+  end
+  local function edgeShape(verts)
+    local best, edges = math.huge, {}
+    local function d2(a, b) return (a[1] - b[1]) ^ 2 + (a[2] - b[2]) ^ 2 + (a[3] - b[3]) ^ 2 end
+    for i = 1, #verts do for j = i + 1, #verts do best = math.min(best, d2(verts[i], verts[j])) end end
+    for i = 1, #verts do for j = i + 1, #verts do
+      if math.abs(d2(verts[i], verts[j]) - best) < 1e-6 then edges[#edges + 1] = { verts[i], verts[j] } end
+    end end
+    local pts, per = {}, BG_NP / #edges
+    for n = 0, BG_NP - 1 do
+      local e = edges[math.floor(n / per) + 1]
+      local f = (n % per) / per + 0.5 / per
+      local a, b = e[1], e[2]
+      pts[#pts + 1] = { a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f, a[3] + (b[3] - a[3]) * f }
+    end
+    BG_SHAPES[#BG_SHAPES + 1] = norm(pts)
+  end
+  local function curveShape(fn)
+    local pts = {}
+    for n = 0, BG_NP - 1 do pts[#pts + 1] = fn(n) end
+    BG_SHAPES[#BG_SHAPES + 1] = norm(pts)
+  end
+  local cube = {}
+  for x = -1, 1, 2 do for y = -1, 1, 2 do for z = -1, 1, 2 do cube[#cube + 1] = { x, y, z } end end end
+  edgeShape(cube)
+  edgeShape({ { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } })
+  curveShape(function(n)
+    local ring, k = math.floor(n / 50), n % 50
+    local u, v = ring / 20 * 2 * math.pi, k / 50 * 2 * math.pi
+    return { (0.68 + 0.32 * math.cos(v)) * math.cos(u), 0.32 * math.sin(v), (0.68 + 0.32 * math.cos(v)) * math.sin(u) }
+  end)
+  local ico = {}
+  for _, a in ipairs({ -1, 1 }) do for _, b in ipairs({ -PHI, PHI }) do
+    ico[#ico + 1] = { 0, a, b }; ico[#ico + 1] = { a, b, 0 }; ico[#ico + 1] = { b, 0, a }
+  end end
+  edgeShape(ico)
+  curveShape(function(n)
+    local ring, a = math.floor(n / 334), (n % 334) / 334 * 2 * math.pi
+    local c, s2 = math.cos(a), math.sin(a)
+    if ring == 0 then return { c, s2, 0 } elseif ring == 1 then return { c, 0, s2 } else return { 0, c, s2 } end
+  end)
+  edgeShape({ { 1, 1, 1 }, { 1, -1, -1 }, { -1, 1, -1 }, { -1, -1, 1 } })
+end
+local BG_HOLD, BG_MORPH = 6, 2
+local bgMorph = { from = 1, to = 1, start = -100, nextAt = 0 }
+
+local function drawBackShape(t, dt)
+  local x1, y1 = L.rx1, 1                 -- the whole right-hand (red box) area
+  local cw, ch = L.rw, H
+  local pw, ph = cw * 2, ch * 3
+  if bgMorph.nextAt == 0 then bgMorph.nextAt = t + BG_HOLD end
+  if t >= bgMorph.nextAt then
+    bgMorph.from, bgMorph.to = bgMorph.to, bgMorph.to % #BG_SHAPES + 1
+    bgMorph.start, bgMorph.nextAt = t, t + BG_MORPH + BG_HOLD
+  end
+  local f = clamp((t - bgMorph.start) / BG_MORPH, 0, 1)
+  local e = f * f * (3 - 2 * f)
+  local A, B = BG_SHAPES[bgMorph.from], BG_SHAPES[bgMorph.to]
+  local pulse = math.exp(-(t - BT.last) * 6)
+  BT.spin = BT.spin + BT.bass * 1.2 * dt
+  local spin = t * 0.6 + BT.spin
+  local cx, sx, cy, sy = math.cos(spin * 0.9), math.sin(spin * 0.9), math.cos(spin * 1.3), math.sin(spin * 1.3)
+  local scale = math.min(pw, ph) * 0.42 * 3.2 * (1 + 0.12 * math.sin(f * math.pi)) * (1 + 0.1 * pulse + 0.05 * BT.bass)
+  local pix = {}
+  for i = 1, BG_NP do
+    local a, b = A[i], B[i]
+    local x = a[1] + (b[1] - a[1]) * e
+    local y = a[2] + (b[2] - a[2]) * e
+    local z = a[3] + (b[3] - a[3]) * e
+    y, z = y * cx - z * sx, y * sx + z * cx
+    x, z = x * cy + z * sy, -x * sy + z * cy
+    local d = z + 3.2
+    local px = math.floor(pw / 2 + x * scale / d + 0.5)
+    local py = math.floor(ph / 2 + y * scale / d + 0.5)
+    if px >= 0 and py >= 0 and px < pw and py < ph then
+      local k = py * pw + px
+      if not pix[k] or z < pix[k] then pix[k] = z end
+    end
+  end
+  for _, rt in ipairs(BT.rings) do                       -- faint rings on the beat
+    local age = t - rt
+    if age < 0.6 then
+      local rad = math.min(pw, ph) * (0.3 + age * 1.2)
+      for a = 0, 239 do
+        local ang = a / 240 * 2 * math.pi
+        local px = math.floor(pw / 2 + math.cos(ang) * rad * 1.15 + 0.5)
+        local py = math.floor(ph / 2 + math.sin(ang) * rad + 0.5)
+        if px >= 0 and py >= 0 and px < pw and py < ph then
+          local k = py * pw + px
+          if not pix[k] then pix[k] = 10 end
+        end
+      end
+    end
+  end
+  -- palette: dim tints, a little brighter right on the beat
+  local sc = BG_SCHEMES[BT.scheme]
+  local k = 1 + 0.5 * pulse
+  for _, m in ipairs(mons) do
+    m.p.setPaletteColour(2 ^ 1, mix(sc[1], k))
+    m.p.setPaletteColour(2 ^ 6, mix(sc[2], k))
+    m.p.setPaletteColour(2 ^ 9, mix(sc[3], k))
+  end
+  for cyy = 0, ch - 1 do
+    for cxx = 0, cw - 1 do
+      local bits, zmin = 0, math.huge
+      for sub = 0, 5 do
+        local z = pix[(cyy * 3 + math.floor(sub / 2)) * pw + cxx * 2 + sub % 2]
+        if z then bits = bits + 2 ^ sub; if z < zmin then zmin = z end end
+      end
+      if bits > 0 then
+        local col = zmin >= 10 and BG_RING or (zmin < 0 and BG_NEAR or BG_FAR)
+        if bits >= 32 then setCell(x1 + cxx, y1 + cyy, string.char(128 + (63 - bits)), BLACK, col)
+        else setCell(x1 + cxx, y1 + cyy, string.char(128 + bits), col, BLACK) end
+      end
+    end
+  end
+end
+
 local function drawEQ()
   local eqH = L.ey2 - L.ey1 + 1
   local units = eqH * 3
@@ -740,6 +899,8 @@ local function draw(dt, t)
   updateBars(dt, active)
   local bass = (shown[1] + shown[2] + shown[3] + shown[4]) / 4
   drawStars(dt, 1 + bass * 2.5)
+  beatTick(t)
+  drawBackShape(t, dt)            -- dim shape behind the whole right-hand area
   for y = 1, H do setCell(L.sep, y, G_VLINE, YELLOW, BLACK) end
   drawLeft()
   drawTitle(t)
@@ -902,16 +1063,9 @@ local function handleRemote(msg)
 end
 
 -- bass level + simple beat detection for remote screens (sent ~10x a second)
-local beatAvg, lastBeat = 0, 0
 local function sendBeat(t)
   if not netOn then return end
-  local playing = S.data and not S.paused and not S.loading
-  local bass = 0
-  if playing then bass = (levels[1] + levels[2] + levels[3] + levels[4]) / 4 end
-  local beat = playing and bass > 0.3 and bass > beatAvg * 1.25 + 0.05 and t - lastBeat > 0.25
-  if beat then lastBeat = t end
-  beatAvg = beatAvg * 0.85 + bass * 0.15
-  pcall(rednet.broadcast, { type = "beat", bass = bass, beat = beat }, PROTO)
+  pcall(rednet.broadcast, { type = "beat", bass = BT.bass, beat = BT.beat }, PROTO)
 end
 
 local function renderLoop()
