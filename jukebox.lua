@@ -36,6 +36,7 @@ local PAL = {
   [colors.purple]    = 0x9b5cff,
   [colors.magenta]   = 0xff4fa3,
   [colors.lime]      = 0x7ed957,
+  [colors.lightBlue] = 0x38c6ff,
   [colors.green]     = 0x2ee05a,
   [colors.yellow]    = 0xffd23f,
   [colors.red]       = 0xff3b3b,
@@ -45,6 +46,7 @@ for c, v in pairs(PAL) do mon.setPaletteColour(c, v) end
 -- blit colour codes
 local WHITE, MAGENTA, YELLOW, LIME, GRAY, LGRAY = "0", "2", "4", "5", "7", "8"
 local PURPLE, HILITE, PANEL, GREEN, RED, BLACK = "a", "b", "c", "d", "e", "f"
+local LBLUE = "3"
 
 -- CC font glyphs
 local G_RIGHT, G_LEFT, G_UP, G_DOWN, G_DOT = "\16", "\17", "\30", "\31", "\7"
@@ -547,9 +549,30 @@ local function drawLeft()
   button("down", mid + 1, L.fy1, lw, H, G_DOWN .. " DOWN", YELLOW, GRAY, function() scrollBy(page) end, canDown)
 end
 
+-- border split into a red half and a light-blue half chasing each other around the box
+local function drawChaseBorder(x1, y1, x2, y2, t)
+  -- thin lines drawn with teletext glyphs; inv = colour goes in the background
+  local ring = {}
+  local function add(x, y, ch, inv) ring[#ring + 1] = { x, y, ch, inv } end
+  add(x1, y1, "\159", true)                                     -- top-left corner
+  for x = x1 + 1, x2 - 1 do add(x, y1, "\143", true) end        -- top: bottom third
+  add(x2, y1, "\144", false)                                    -- top-right corner
+  for y = y1 + 1, y2 - 1 do add(x2, y, "\149", false) end       -- right: left half
+  add(x2, y2, "\129", false)                                    -- bottom-right corner
+  for x = x2 - 1, x1 + 1, -1 do add(x, y2, "\131", false) end   -- bottom: top third
+  add(x1, y2, "\130", false)                                    -- bottom-left corner
+  for y = y2 - 1, y1 + 1, -1 do add(x1, y, "\149", true) end    -- left: right half
+  local n = #ring
+  local head = math.floor(t * 22) % n           -- red half's front; blue fills the other half
+  for i, c in ipairs(ring) do
+    local col = ((head - i) % n) < n / 2 and RED or LBLUE
+    if c[4] then setCell(c[1], c[2], c[3], BLACK, col) else setCell(c[1], c[2], c[3], col, BLACK) end
+  end
+end
+
 local function drawTitle(t)
-  fill(L.tx1, L.ty1, L.tx2, L.ty2, PURPLE)
   fill(L.tx1 + 1, L.ty1 + 1, L.tx2 - 1, L.ty2 - 1, PANEL)
+  drawChaseBorder(L.tx1, L.ty1, L.tx2, L.ty2, t)
   local iw, x0 = L.tw - 4, L.tx1 + 2
   local title, artist = "Nothing playing", "Pick a playlist to start"
   if S.song then title, artist = S.song.title, S.song.artist end
@@ -624,8 +647,8 @@ local function drawControls()
   local x = L.cx - math.floor(total / 2)
   for _, b in ipairs(btns) do
     local isPlay = b[1] == "play"
-    button(b[1], x, L.by1, x + b[3] - 1, L.by2, b[2], isPlay and BLACK or LIME,
-      isPlay and LIME or PANEL, b[4], S.song ~= nil)
+    button(b[1], x, L.by1, x + b[3] - 1, L.by2, b[2], isPlay and WHITE or BLACK,
+      isPlay and RED or LBLUE, b[4], S.song ~= nil)
     x = x + b[3] + gap
   end
 end
