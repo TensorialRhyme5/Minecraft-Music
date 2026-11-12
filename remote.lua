@@ -738,7 +738,7 @@ local function drawScene(t, mc, x1, y1, cw, ch)
   rect(tx, b4 + 3, tx + 3, gy - 1, BROWN)                      -- 4-pixel-wide trunk
   local function leaves(xa, xb, y)
     for yy = y, y + 2 do for x = xa, xb do
-      put(x, yy, ((x * 5 + yy * 3) % 11 == 0) and DKGREEN or GRASS)
+      put(x, yy, ((x * 3 + yy * 5) % 7 == 0) and GRASS or DKGREEN)   -- dark leaves, lighter specks
     end end
   end
   leaves(tx - 4, tx + 7, b4 - 9)                               -- rounded top
