@@ -45,7 +45,7 @@ local PAL = {
   [colors.gray]      = 0x4a4e66,
   [colors.lightGray] = 0x9ea3c2,
   [colors.lightBlue] = 0x38c6ff,
-  [colors.cyan]      = 0x7fc8ff, -- day sky
+  [colors.cyan]      = 0xa8dcff, -- day sky
   [colors.purple]    = 0x0e1a4a, -- night sky
   [colors.orange]    = 0xd8904a, -- sunrise / sunset + wood planks
   [colors.pink]      = 0x7a4a24, -- brown (wood, dirt, doors)
@@ -590,7 +590,7 @@ local SPR = {
   shambler = { ".dd", "777", ".7.", "b.b" },
   skeleton = { ".88", "000", ".8.", "8.8" },
   spider   = { "f.f.f", ".fffe", "f.f.f" },
-  resident = { ".e.", ".4.", "111", ".1.", "6.6" },  -- original explorer in a red hat
+  resident = { "3333", "3d33", "3303", "ffff", "ffff", "7777" },  -- light blue w/ green + white specks, black pants, gray feet
 }
 local DAY_MOBS = { "sheep", "cow", "chicken" }
 local NIGHT_MOBS = { "shambler", "skeleton", "spider" }
@@ -754,7 +754,7 @@ local function drawScene(t, mc, x1, y1, cw, ch)
     if m.x < -8 or m.x > PW + 3 then table.remove(SC.mobs, i)
     else sprite(m.kind, math.floor(m.x), gy - 1 - ((math.floor(t * 4 + i) % 2 == 0) and 0 or 0), m.dir) end
   end
-  if R.state ~= "inside" then sprite("resident", math.floor(R.x + 0.5), gy - 1, R.face) end
+  if R.state ~= "inside" then sprite("resident", math.floor(R.x / 2) * 2 + 1, gy - 1, R.face) end -- cell-aligned so all colours show
 
   -- rain
   if rain then
