@@ -584,16 +584,15 @@ end
 
 -- sprites face right; "." = transparent
 local SPR = {
-  sheep    = { "00008", "00008", "7..7." },
-  cow      = { "60066", "66606", "6..6." },
-  chicken  = { ".0e", "004", ".4." },
-  shambler = { ".dd", "777", ".7.", "b.b" },
-  skeleton = { ".88", "000", ".8.", "8.8" },
-  spider   = { "f.f.f", ".fffe", "f.f.f" },
+  -- designed so every 2x3 screen cell needs at most two colours
+  cow      = { "666600", "666600", "6.6.00" },            -- brown body, white face
+  pig      = { "222222", "222222", "2.2.22" },
+  zombie   = { "dd", "d7", "77", "66", "66", "dd" },     -- green skin, torn gray shirt, brown pants
+  skeleton = { "00", "f0", "00", ".0", "0.", "0." },
   resident = { "33", "3d", "33", "ff", "ff", "77" },  -- light blue w/ green speck, black pants, gray feet
 }
-local DAY_MOBS = { "sheep", "cow", "chicken" }
-local NIGHT_MOBS = { "shambler", "skeleton", "spider" }
+local DAY_MOBS = { "cow", "pig" }
+local NIGHT_MOBS = { "zombie", "skeleton" }
 
 local SC = { mobs = {}, nextMob = 0, clouds = nil, drops = nil, stars = nil, bolt = nil, nextBolt = 0, lastT = nil,
   res = { state = "inside", x = 0, target = 0, wait = 0, face = 1 } }
@@ -610,8 +609,8 @@ local function drawScene(t, mc, x1, y1, cw, ch)
   -- sky
   local top, low
   if mc >= 6.5 and mc < 17.5 then top, low = DAYSKY, DAYSKY
-  elseif mc >= 4.5 and mc < 6.5 then top, low = NIGHTSKY, ORANGE
-  elseif mc >= 17.5 and mc < 19.5 then top, low = MAGENTA, ORANGE
+  elseif mc >= 4.5 and mc < 6.5 then top, low = NIGHTSKY, RED       -- sunrise (not orange: that's the planks)
+  elseif mc >= 17.5 and mc < 19.5 then top, low = MAGENTA, RED      -- sunset
   else top, low = NIGHTSKY, NIGHTSKY end
   if rain and top == DAYSKY then top, low = storm and GRAY or LGRAY, storm and GRAY or LGRAY end
   local flash = SC.bolt and t < SC.bolt.flash
@@ -677,14 +676,27 @@ local function drawScene(t, mc, x1, y1, cw, ch)
     rect(cx + 1, c.y + 2, cx + c.w - 2, c.y + 2, cloudCol)
   end
 
-  -- hill: stepped blocks, grass on top, dirt below
-  local hcx, hrx, hh = math.floor(PW * 0.8), math.floor(PW * 0.24), math.floor(gy * 0.5)
-  for bx = hcx - hrx - 1, hcx + hrx + 1, 3 do
-    local f = math.abs(bx + 1 - hcx) / hrx
-    local d = math.floor(hh * (1 - f) ^ 0.8 / 2 + 0.5) * 2
+  -- hill: rounded steps of 4-pixel blocks, grassy body with a bright grass top edge
+  local hcx, hrx = math.floor(PW * 0.8 / 4) * 4 + 1, math.floor(PW * 0.3)
+  local levels = math.max(2, math.floor(gy * 0.45 / 3))
+  for bx = math.floor((hcx - hrx) / 4) * 4 + 1, hcx + hrx, 4 do
+    local dist = math.abs(bx + 1.5 - hcx)
+    local d = clamp(math.floor((hrx - dist) / 5) + 1, 0, levels) * 3   -- even steps: 4 px across, 3 px up
     if d > 0 then
-      rect(bx, gy - d, bx + 2, gy - 1, BROWN)
-      rect(bx, gy - d, bx + 2, gy - d, GRASS)
+      for x = bx, bx + 3 do
+        for y = gy - d, gy - 1 do
+          local depth = y - (gy - d)
+          local c
+          if depth == 0 then c = GRASS                               -- grass top
+          elseif depth < 3 then c = BROWN                            -- dirt layer
+          else                                                       -- stone with coal ore clusters
+            local cx, cy = math.floor(x / 4), math.floor(y / 3)
+            local ore = (cx * 7 + cy * 11) % 5 == 0
+            c = (ore and (x + y) % 2 == 0) and BLACK or LGRAY
+          end
+          put(x, y, c)
+        end
+      end
     end
   end
 
@@ -692,31 +704,44 @@ local function drawScene(t, mc, x1, y1, cw, ch)
   rect(1, gy, PW, gy, GRASS)
   rect(1, gy + 1, PW, PH, BROWN)
 
-  -- wooden house: log corners, plank walls, cobble base, stepped roof
-  local hx = 3
-  local hw = 14
-  rect(hx, gy - 8, hx + hw - 1, gy - 2, ORANGE)              -- planks
-  rect(hx, gy - 1, hx + hw - 1, gy - 1, LGRAY)               -- cobblestone base
-  rect(hx, gy - 9, hx + hw - 1, gy - 9, BROWN)               -- top log beam
-  rect(hx, gy - 9, hx + 1, gy - 1, BROWN)                    -- log corners
-  rect(hx + hw - 2, gy - 9, hx + hw - 1, gy - 1, BROWN)
-  for i = 0, 3 do                                            -- stepped roof
-    rect(hx - 1 + i * 2, gy - 10 - i, hx + hw - i * 2, gy - 10 - i, BROWN)
-  end
-  local doorX = hx + 3
-  rect(doorX, gy - 4, doorX + 1, gy - 1, BROWN)
-  put(doorX + 1, gy - 3, YELLOW)                              -- door knob
+  -- village-style cottage, laid out on the 2x3 screen-cell grid so every block stays crisp
+  -- (rows counted up from the grass line: one block row = 3 pixels)
+  local hx, hw = 3, 18
+  local b1 = gy - 3                 -- bottom block row: cobblestone base (gy-3 .. gy-1)
+  local b2 = gy - 6                 -- lower wall row
+  local b3 = gy - 9                 -- upper wall row (windows)
+  local b4 = gy - 12                -- log beam
+  local function blockRow(y, xa, xb, c) rect(xa, y, xb, y + 2, c) end
+  -- cobblestone base
+  for x = hx, hx + hw - 1 do for y = b1, b1 + 2 do put(x, y, ((x + y * 2) % 3 == 0) and GRAY or LGRAY) end end
+  -- plank walls with seams, log corner posts and top beam
+  for y = b3, b2 + 2 do for x = hx, hx + hw - 1 do put(x, y, (y == b3 + 2 or y == b2 + 2) and BROWN or ORANGE) end end
+  blockRow(b4, hx, hx + hw - 1, BROWN)
+  rect(hx, b4, hx + 1, b1 + 2, BROWN)
+  rect(hx + hw - 2, b4, hx + hw - 1, b1 + 2, BROWN)
+  -- roof: stair steps on the edges, plank gable inside, small attic window
+  local r1, r2, r3 = b4 - 3, b4 - 6, b4 - 9
+  blockRow(r1, hx - 2, hx + 1, BROWN); blockRow(r1, hx + 2, hx + hw - 3, ORANGE); blockRow(r1, hx + hw - 2, hx + hw + 1, BROWN)
+  blockRow(r2, hx + 2, hx + 5, BROWN); blockRow(r2, hx + 6, hx + hw - 7, ORANGE); blockRow(r2, hx + hw - 6, hx + hw - 3, BROWN)
+  blockRow(r3, hx + 6, hx + hw - 7, BROWN)
   local lightOn = mc >= 18 or mc < 6.5 or (storm and SC.res.state == "inside")
-  rect(hx + 8, gy - 7, hx + 10, gy - 5, lightOn and YELLOW or LBLUE)   -- glass window
+  local glass = lightOn and YELLOW or LBLUE
+  blockRow(r2, hx + 8, hx + 9, glass)                          -- attic window
+  -- windows (one block tall, two wide) and a 1x2 door in the middle
+  blockRow(b3, hx + 2, hx + 5, glass)
+  blockRow(b3, hx + hw - 6, hx + hw - 3, glass)
+  local doorX = hx + 8
+  rect(doorX, b2, doorX + 1, b1 + 2, BROWN)
 
-  -- blocky oak tree
-  local tx = hx + hw + 8
-  rect(tx, gy - 7, tx + 1, gy - 1, BROWN)
-  local function leaves(xa, ya, xb, yb)
-    for y = ya, yb do for x = xa, xb do put(x, y, ((x * 3 + y * 7) % 5 == 0) and GRASS or DKGREEN) end end
+  -- blocky oak tree: 1-block trunk, boxy leaf canopy
+  local tx = hx + hw + 9
+  rect(tx, b4, tx + 1, gy - 1, BROWN)
+  local function leaves(xa, xb, y)
+    for yy = y, y + 2 do for x = xa, xb do put(x, yy, ((x * 3 + yy * 5) % 7 == 0) and GRASS or DKGREEN) end end
   end
-  leaves(tx - 4, gy - 10, tx + 5, gy - 8)
-  leaves(tx - 2, gy - 12, tx + 3, gy - 11)
+  leaves(tx - 6, tx + 7, b4 - 3)
+  leaves(tx - 6, tx + 7, b4 - 6)
+  leaves(tx - 4, tx + 5, b4 - 9)
 
   -- resident: out during the day, home at night or when it rains
   local R = SC.res
@@ -740,20 +765,29 @@ local function drawScene(t, mc, x1, y1, cw, ch)
     end
   end
 
-  -- mobs wander past (animals by day, creatures at night)
-  if t >= SC.nextMob and #SC.mobs < 2 then
-    local pool = isNight and NIGHT_MOBS or DAY_MOBS
-    local dir = math.random(0, 1) == 0 and -1 or 1
-    SC.mobs[#SC.mobs + 1] = { kind = pool[math.random(1, #pool)], dir = dir,
-      x = dir > 0 and -5 or PW + 1, v = 2.5 + math.random() * 3 }
-    SC.nextMob = t + math.random(6, 16)
-  end
+  -- mobs: stand somewhere for a while, then disappear (animals by day, monsters at night)
+  local pool = isNight and NIGHT_MOBS or DAY_MOBS
   for i = #SC.mobs, 1, -1 do
     local m = SC.mobs[i]
-    m.x = m.x + m.dir * m.v * dt
-    if m.x < -8 or m.x > PW + 3 then table.remove(SC.mobs, i)
-    else sprite(m.kind, math.floor(m.x), gy - 1 - ((math.floor(t * 4 + i) % 2 == 0) and 0 or 0), m.dir) end
+    local ok = false
+    for _, k in ipairs(pool) do if k == m.kind then ok = true end end
+    if t > m.untilT or not ok then table.remove(SC.mobs, i) end
   end
+  if t >= SC.nextMob and #SC.mobs < 2 then
+    local kind = pool[math.random(1, #pool)]
+    local w = #SPR[kind][1]
+    for _ = 1, 8 do                                    -- find a free spot (not on the house or another mob)
+      local x = math.floor(math.random(hx + hw + 2, PW - w) / 2) * 2 + 1
+      local free = true
+      for _, m in ipairs(SC.mobs) do if math.abs(m.x - x) < 8 then free = false end end
+      if free then
+        SC.mobs[#SC.mobs + 1] = { kind = kind, x = x, face = math.random(0, 1) == 0 and -1 or 1, untilT = t + math.random(25, 50) }
+        break
+      end
+    end
+    SC.nextMob = t + math.random(8, 20)
+  end
+  for _, m in ipairs(SC.mobs) do sprite(m.kind, m.x, gy - 1, m.face) end
   if R.state ~= "inside" then sprite("resident", math.floor(R.x / 2) * 2 + 1, gy - 1, R.face) end -- cell-aligned so all colours show
 
   -- rain
