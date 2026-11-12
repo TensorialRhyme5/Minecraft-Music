@@ -523,7 +523,7 @@ local function loadPlaylists()
         local a, b = title:match("^(.*) %- (.-)$")
         if a then title, artist = a, b else artist = "" end
       end
-      out[#out + 1] = { title = clean(title), artist = clean(artist), file = s.file, bpm = tonumber(s.bpm) }
+      out[#out + 1] = { title = clean(title), artist = clean(artist), file = s.file, bpm = tonumber(s.bpm), theme = s.theme }
     end
     if #out > 0 then list[#list + 1] = { name = clean(name), songs = out } end
   end
@@ -744,12 +744,22 @@ theme = function()
   local name = _G.__THEME
   local pl = S.lists and (S.curPl or S.pl) and S.lists[S.curPl or S.pl]
   if not name and pl then name = THEME_FOR[pl.name] end
-  if not name and S.song and S.song.bpm then
-    local cap = pl and THEME_CAP[pl.name]
+  local cap = pl and THEME_CAP[pl.name]
+  if not name and S.song and S.song.theme and THEMES[S.song.theme] then
+    name = S.song.theme                          -- measured "feel" of the song (energy + BPM)
+  elseif not name and S.song and S.song.bpm then
     for _, r in ipairs(BPM_THEMES) do
       name = r[2]
       if S.song.bpm < r[1] or name == cap then break end
     end
+  end
+  if name and cap then                           -- keep capped playlists calm
+    local rank, capRank = 0, 0
+    for i, r in ipairs(BPM_THEMES) do
+      if r[2] == name then rank = i end
+      if r[2] == cap then capRank = i end
+    end
+    if rank > capRank then name = cap end
   end
   return THEMES[name or "classic"] or THEMES.classic
 end
