@@ -20,9 +20,20 @@ local CFG = {
 
 local dfpwm = require("cc.audio.dfpwm")
 
-local mon = peripheral.find("monitor")
-if not mon then error("No monitor found. Put the computer touching the monitor (or use wired modems).", 0) end
-local monName = peripheral.getName(mon)
+-- every connected monitor shows the same screen (mirrored) and accepts taps
+local mons, monByName = {}, {}
+local function findMonitors()
+  mons, monByName = {}, {}
+  for _, m in ipairs({ peripheral.find("monitor") }) do
+    if m.isColour() then
+      local e = { p = m, name = peripheral.getName(m), lastRow = {} }
+      mons[#mons + 1] = e
+      monByName[e.name] = e
+    end
+  end
+end
+findMonitors()
+if #mons == 0 then error("No advanced monitor found. Put the computer touching the monitor (or use wired modems).", 0) end
 local speakers = { peripheral.find("speaker") }
 if #speakers == 0 then error("No speaker found. Place a speaker touching the computer.", 0) end
 
@@ -41,7 +52,10 @@ local PAL = {
   [colors.yellow]    = 0xffd23f,
   [colors.red]       = 0xff3b3b,
 }
-for c, v in pairs(PAL) do mon.setPaletteColour(c, v) end
+local function applyPalette()
+  for _, e in ipairs(mons) do for c, v in pairs(PAL) do e.p.setPaletteColour(c, v) end end
+end
+applyPalette()
 
 -- blit colour codes
 local WHITE, MAGENTA, YELLOW, LIME, GRAY, LGRAY = "0", "2", "4", "5", "7", "8"
@@ -83,7 +97,7 @@ end
 
 -- ---------------------------------------------------------- framebuffer
 local W, H = 0, 0
-local fbC, fbF, fbB, lastRow = {}, {}, {}, {}
+local fbC, fbF, fbB = {}, {}, {}
 
 local function fbClear()
   for y = 1, H do
@@ -111,10 +125,12 @@ local function present()
   for y = 1, H do
     local c, f, b = table.concat(fbC[y]), table.concat(fbF[y]), table.concat(fbB[y])
     local key = c .. f .. b
-    if lastRow[y] ~= key then
-      mon.setCursorPos(1, y)
-      mon.blit(c, f, b)
-      lastRow[y] = key
+    for _, e in ipairs(mons) do
+      if e.lastRow[y] ~= key then
+        e.p.setCursorPos(1, y)
+        e.p.blit(c, f, b)
+        e.lastRow[y] = key
+      end
     end
   end
 end
@@ -122,12 +138,17 @@ end
 -- ---------------------------------------------------------- layout
 local L = {}
 local function computeLayout()
-  mon.setTextScale(CFG.textScale)
-  W, H = mon.getSize()
-  fbC, fbF, fbB, lastRow = {}, {}, {}, {}
+  W, H = math.huge, math.huge
+  for _, e in ipairs(mons) do            -- if sizes differ, use the smallest
+    e.p.setTextScale(CFG.textScale)
+    local w, h = e.p.getSize()
+    W, H = math.min(W, w), math.min(H, h)
+    e.lastRow = {}
+    e.p.setBackgroundColour(colors.black)
+    e.p.clear()
+  end
+  fbC, fbF, fbB = {}, {}, {}
   for y = 1, H do fbC[y], fbF[y], fbB[y] = {}, {}, {} end
-  mon.setBackgroundColour(colors.black)
-  mon.clear()
 
   L.lw  = math.max(20, math.floor(W * 0.3))       -- left (yellow) panel width
   L.sep = L.lw + 1
@@ -772,9 +793,14 @@ local function inputLoop()
   while true do
     local ev, a, b, c = os.pullEventRaw()
     if ev == "terminate" then return
-    elseif ev == "monitor_touch" and a == monName then handleTouch(b, c)
-    elseif ev == "monitor_resize" and a == monName then
-      computeLayout(); setupBands(L.nb); initStars()
+    elseif ev == "monitor_touch" and monByName[a] then handleTouch(b, c)
+    elseif (ev == "monitor_resize" and monByName[a]) or ev == "peripheral" or ev == "peripheral_detach" then
+      local old = #mons
+      findMonitors()
+      if #mons > 0 then
+        applyPalette(); computeLayout(); setupBands(L.nb)
+        if #mons ~= old or ev == "monitor_resize" then initStars() end
+      end
     elseif ev == "key" then
       if a == keys.q then return
       elseif a == keys.space then togglePause()
@@ -816,12 +842,14 @@ parallel.waitForAny(inputLoop, audioLoop, prefetchLoop, renderLoop)
 
 -- cleanup
 stopSpeakers()
-for i = 0, 15 do
-  local c = 2 ^ i
-  mon.setPaletteColour(c, term.nativePaletteColour(c))
+for _, e in ipairs(mons) do
+  for i = 0, 15 do
+    local c = 2 ^ i
+    e.p.setPaletteColour(c, term.nativePaletteColour(c))
+  end
+  e.p.setBackgroundColour(colors.black)
+  e.p.clear()
 end
-mon.setBackgroundColour(colors.black)
-mon.clear()
 term.setTextColour(colors.white)
 term.clear(); term.setCursorPos(1, 1)
 print("Jukebox stopped.")
