@@ -736,16 +736,16 @@ local function drawScene(t, mc, x1, y1, cw, ch)
   -- round, bright tree with a thick trunk (shape from Bryan's sketch)
   local tx = hx + hw + 8                                       -- trunk left edge
   rect(tx, b4 + 3, tx + 3, gy - 1, BROWN)                      -- 4-pixel-wide trunk
-  -- blocky canopy traced from Bryan's sketch (each row = one 3-pixel block row, x offsets from the trunk)
+  -- blocky oak: small cap, medium layer, two wide bottom layers (rows = 3-pixel block rows)
   local rows = {
-    { b4 - 6, tx - 2, tx + 7 },    -- top, a little right of centre (one block below the roof peak)
-    { b4 - 3, tx - 6, tx + 9 },    -- widest
-    { b4,     tx - 6, tx + 9 },
-    { b4 + 3, tx - 4, tx + 7 },    -- lower right tucks in, bottom lump over the trunk
+    { b4 - 6, tx,     tx + 3, 4 },    -- cap (top stays one block below the roof peak)
+    { b4 - 3, tx - 4, tx + 7, 5 },    -- middle layer
+    { b4,     tx - 6, tx + 9, 7 },    -- wide
+    { b4 + 3, tx - 6, tx + 9, 11 },   -- wide bottom, darker (fewer light specks)
   }
   for _, r in ipairs(rows) do
     for y = r[1], r[1] + 2 do
-      for x = r[2], r[3] do put(x, y, ((x * 3 + y * 5) % 7 == 0) and GRASS or DKGREEN) end
+      for x = r[2], r[3] do put(x, y, ((x * 3 + y * 5) % r[4] == 0) and GRASS or DKGREEN) end
     end
   end
 
