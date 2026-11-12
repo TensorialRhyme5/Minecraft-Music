@@ -297,8 +297,10 @@ local S = {
   data = nil, loading = false, err = nil, paused = false,
   startByte = 0, feedByte = 0, startTime = 0, pausePos = 0,
   gen = 0, trackId = 0, trackStart = 0,
+  upNext = {},                      -- queued songs { pl, si } played before the shuffle continues
+  curPl = nil, curSi = nil, fromQueue = false,
 }
-local UI = { view = "playlists", viewPl = nil, viewOrder = nil, lastPl = nil, scroll = 0, plScroll = 0 }
+local UI = { view = "playlists", viewPl = nil, viewOrder = nil, lastPl = nil, scroll = 0, plScroll = 0, queueMode = false }
 local hits, flash = {}, {}
 
 local function stopSpeakers() for _, s in ipairs(speakers) do pcall(s.stop) end end
@@ -359,21 +361,41 @@ local function termStatus()
   print("Q = quit")
 end
 
-local function playIndex(i)
-  S.qi = i
-  S.song = S.lists[S.pl].songs[S.queue[i]]
+local function playSong(pl, si, fromQueue)
+  S.song = S.lists[pl].songs[si]
+  S.curPl, S.curSi, S.fromQueue = pl, si, fromQueue
   S.data, S.loading, S.err, S.paused, S.pausePos = nil, true, nil, false, 0
   S.trackId = S.trackId + 1
   S.trackStart = now()
   S.gen = S.gen + 1
   stopSpeakers()
-  if UI.view == "songs" and UI.viewOrder == S.queue then ensureVisible(i) end
   termStatus()
   wake()
 end
 
+local function playIndex(i)
+  S.qi = i
+  playSong(S.pl, S.queue[i], false)
+  if UI.view == "songs" and UI.viewOrder == S.queue then ensureVisible(i) end
+end
+
+local function queuePos(pl, si)
+  for i, e in ipairs(S.upNext) do if e.pl == pl and e.si == si then return i end end
+end
+
+local function toggleQueue(pl, si)
+  local i = queuePos(pl, si)
+  if i then table.remove(S.upNext, i) else S.upNext[#S.upNext + 1] = { pl = pl, si = si } end
+  wake() -- lets the prefetcher grab the new next song
+end
+
 local function nextTrack()
   if not S.queue then return end
+  if #S.upNext > 0 then
+    local e = table.remove(S.upNext, 1)
+    playSong(e.pl, e.si, true)
+    return
+  end
   local i = S.qi + 1
   if i > #S.queue then
     local q = shuffled(#S.lists[S.pl].songs, S.queue[#S.queue])  -- reshuffle, keep going
@@ -385,7 +407,9 @@ end
 
 local function prevTrack()
   if not S.queue then return end
-  if (S.data and position() > 3) or S.qi <= 1 then
+  if S.data and position() > 3 then seek(0)
+  elseif S.fromQueue then playIndex(S.qi)          -- back to the shuffle song before the queue
+  elseif S.qi <= 1 then
     if S.data then seek(0) else playIndex(S.qi) end
   else
     playIndex(S.qi - 1)
@@ -426,6 +450,8 @@ local function getData(file)
 end
 
 local function nextFile()
+  local e = S.upNext[1]
+  if e then return S.lists[e.pl].songs[e.si].file end
   if not S.queue or S.qi >= #S.queue then return nil end
   return S.lists[S.pl].songs[S.queue[S.qi + 1]].file
 end
@@ -513,12 +539,17 @@ local function drawLeft()
       if idx > total then break end
       local y = L.ly1 + r - 1
       local song = pl.songs[order[idx]]
-      local cur = (order == S.queue and idx == S.qi)
+      local si = order[idx]
+      local cur = (S.curPl == UI.viewPl and S.curSi == si)
+      local qp = queuePos(UI.viewPl, si)
       if cur then fill(1, y, lw, y, HILITE) end
       local bg = cur and HILITE or nil
-      local num = string.format("%3d ", idx)
       text(1, y, cur and G_RIGHT or " ", YELLOW, bg)
-      text(2, y, num, cur and YELLOW or GRAY, bg)
+      if qp then
+        text(2, y, string.format("%3s ", "Q" .. qp), LBLUE, bg)
+      else
+        text(2, y, string.format("%3d ", idx), cur and YELLOW or GRAY, bg)
+      end
       local room = lw - 5
       local t1 = song.title
       if #t1 > room then t1 = t1:sub(1, room - 2) .. ".." end
@@ -530,7 +561,8 @@ local function drawLeft()
         text(6 + #t1, y, a, LGRAY, bg)
       end
       hit("song:" .. idx, 1, y, lw, y, function()
-        startPlaylist(UI.viewPl, order, idx)
+        if UI.queueMode and S.song then toggleQueue(UI.viewPl, si)
+        else startPlaylist(UI.viewPl, order, idx) end
       end)
     end
   else
@@ -558,16 +590,23 @@ local function drawLeft()
   local per = inSongs and L.rows or math.max(1, math.floor(L.rows / 3))
   local first = math.min(total, scroll + 1)
   local last = math.min(total, scroll + per)
-  local info = first .. "-" .. last .. " of " .. total
-  text(math.floor((lw - #info) / 2) + 1, L.ly2 + 1, info, GRAY)
-  local mid = math.floor(lw / 2)
+  local info, icol = first .. "-" .. last .. " of " .. total, GRAY
+  if UI.queueMode then info, icol = "Tap songs to add/remove from queue", LBLUE end
+  if #info > lw then info = "Tap to queue/unqueue" end
+  text(math.floor((lw - #info) / 2) + 1, L.ly2 + 1, info, icol)
   local canUp, canDown = scroll > 0, scroll + per < total
   local function scrollBy(d)
     if inSongs then UI.scroll = UI.scroll + d else UI.plScroll = UI.plScroll + d end
   end
   local page = math.max(1, per - 2)
-  button("up", 1, L.fy1, mid - 1, H, G_UP .. " UP", YELLOW, GRAY, function() scrollBy(-page) end, canUp)
-  button("down", mid + 1, L.fy1, lw, H, G_DOWN .. " DOWN", YELLOW, GRAY, function() scrollBy(page) end, canDown)
+  local bw = math.floor((lw - 2) / 3)
+  local qx1, qx2 = bw + 2, lw - bw - 1
+  button("up", 1, L.fy1, bw, H, G_UP .. " UP", YELLOW, GRAY, function() scrollBy(-page) end, canUp)
+  local qn = #S.upNext
+  button("queue", qx1, L.fy1, qx2, H, (UI.queueMode and "QUEUE ON" or "QUEUE") .. (qn > 0 and " " .. qn or ""),
+    UI.queueMode and BLACK or LBLUE, UI.queueMode and LBLUE or GRAY,
+    function() UI.queueMode = not UI.queueMode end)
+  button("down", qx2 + 2, L.fy1, lw, H, G_DOWN .. " DOWN", YELLOW, GRAY, function() scrollBy(page) end, canDown)
 end
 
 -- border split into a red half and a light-blue half chasing each other around the box
@@ -604,8 +643,13 @@ local function drawTitle(t)
   if S.err then info, col = S.err, RED
   elseif S.loading then info, col = "Loading...", YELLOW
   elseif S.song then
-    info = (S.paused and "PAUSED" or "SHUFFLE") .. "  " .. G_DOT .. "  " .. S.lists[S.pl].name ..
-      "  " .. G_DOT .. "  " .. S.qi .. "/" .. #S.queue
+    local sep = "  " .. G_DOT .. "  "
+    if S.fromQueue then
+      info = (S.paused and "PAUSED" or "FROM QUEUE") .. sep .. S.lists[S.curPl].name
+    else
+      info = (S.paused and "PAUSED" or "SHUFFLE") .. sep .. S.lists[S.pl].name .. sep .. S.qi .. "/" .. #S.queue
+    end
+    if #S.upNext > 0 then info = info .. sep .. #S.upNext .. " queued" end
     col = S.paused and YELLOW or MAGENTA
   else info, col = "", GRAY end
   if #info > iw then info = info:sub(1, iw) end
