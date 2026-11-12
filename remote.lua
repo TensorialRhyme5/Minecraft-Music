@@ -586,7 +586,7 @@ end
 local SPR = {
   -- designed so every 2x3 screen cell needs at most two colours
   cow      = { "666600", "666600", "6.6.00" },            -- brown body, white face
-  pig      = { "222222", "222222", "2.2.22" },
+  pig      = { "2222", "2222", "2..2" },                    -- small pink block
   zombie   = { "dd", "d7", "77", "66", "66", "dd" },     -- green skin, torn gray shirt, brown pants
   skeleton = { "00", "f0", "00", ".0", "0.", "0." },
   resident = { "33", "3d", "33", "ff", "ff", "77" },  -- light blue w/ green speck, black pants, gray feet
@@ -725,7 +725,7 @@ local function drawScene(t, mc, x1, y1, cw, ch)
   blockRow(r2, hx + 2, hx + 5, BROWN); blockRow(r2, hx + 6, hx + hw - 7, ORANGE); blockRow(r2, hx + hw - 6, hx + hw - 3, BROWN)
   blockRow(r3, hx + 6, hx + hw - 7, BROWN)
   local lightOn = mc >= 18 or mc < 6.5 or (storm and SC.res.state == "inside")
-  local glass = lightOn and YELLOW or LBLUE
+  local glass = lightOn and YELLOW or BLACK                    -- dark by day, lit at night
   blockRow(r2, hx + 8, hx + 9, glass)                          -- attic window
   -- windows (one block tall, two wide) and a 1x2 door in the middle
   blockRow(b3, hx + 2, hx + 5, glass)
@@ -733,15 +733,18 @@ local function drawScene(t, mc, x1, y1, cw, ch)
   local doorX = hx + 8
   rect(doorX, b2, doorX + 1, b1 + 2, BROWN)
 
-  -- blocky oak tree: 1-block trunk, boxy leaf canopy
-  local tx = hx + hw + 9
-  rect(tx, b4, tx + 1, gy - 1, BROWN)
+  -- round, bright tree with a thick trunk (shape from Bryan's sketch)
+  local tx = hx + hw + 8                                       -- trunk left edge
+  rect(tx, b4 + 3, tx + 3, gy - 1, BROWN)                      -- 4-pixel-wide trunk
   local function leaves(xa, xb, y)
-    for yy = y, y + 2 do for x = xa, xb do put(x, yy, ((x * 3 + yy * 5) % 7 == 0) and GRASS or DKGREEN) end end
+    for yy = y, y + 2 do for x = xa, xb do
+      put(x, yy, ((x * 5 + yy * 3) % 11 == 0) and DKGREEN or GRASS)
+    end end
   end
-  leaves(tx - 6, tx + 7, b4 - 3)
-  leaves(tx - 6, tx + 7, b4 - 6)
-  leaves(tx - 4, tx + 5, b4 - 9)
+  leaves(tx - 4, tx + 7, b4 - 9)                               -- rounded top
+  leaves(tx - 6, tx + 9, b4 - 6)
+  leaves(tx - 6, tx + 9, b4 - 3)
+  leaves(tx - 4, tx + 7, b4)                                   -- rounded bottom
 
   -- resident: out during the day, home at night or when it rains
   local R = SC.res
