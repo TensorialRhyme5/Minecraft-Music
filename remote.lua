@@ -551,6 +551,46 @@ end
 local DAYS = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" }
 local MONTHS = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" }
 
+-- ---------------------------------------------------------- Firestone, CO weather (Open-Meteo, free, no key)
+local WX_URL = "https://api.open-meteo.com/v1/forecast?latitude=40.1125&longitude=-104.9366" ..
+  "&current=temperature_2m,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min" ..
+  "&temperature_unit=fahrenheit&timezone=America%2FDenver&forecast_days=1"
+local WX = { at = -1e9, pending = false, ok = false }
+local function wxFetch(t)
+  if WX.pending then return end
+  local wait = WX.ok and 600 or 60                         -- every 10 min (retry each minute until it works)
+  if t - WX.at < wait then return end
+  WX.pending, WX.at = true, t
+  if not pcall(http.request, WX_URL) then WX.pending = false end
+end
+local function wxResult(handle)
+  WX.pending = false
+  if not handle then return end
+  local ok, data = pcall(textutils.unserializeJSON, handle.readAll())
+  handle.close()
+  if ok and type(data) == "table" and type(data.current) == "table" then
+    WX.temp = tonumber(data.current.temperature_2m)
+    WX.code = tonumber(data.current.weather_code) or 0
+    WX.day = data.current.is_day == 1
+    local d = type(data.daily) == "table" and data.daily or {}
+    WX.hi = type(d.temperature_2m_max) == "table" and tonumber(d.temperature_2m_max[1]) or nil
+    WX.lo = type(d.temperature_2m_min) == "table" and tonumber(d.temperature_2m_min[1]) or nil
+    WX.ok = WX.temp ~= nil
+  end
+end
+-- WMO weather code -> short label, icon, icon colour
+local function wxLook(code, day)
+  if code == 0 then return day and "Sunny" or "Clear", day and "\15" or "\7", day and YELLOW or WHITE end
+  if code <= 2 then return "Partly", day and "\15" or "\7", day and YELLOW or LGRAY end
+  if code == 3 then return "Cloudy", "\22", LGRAY end
+  if code == 45 or code == 48 then return "Fog", "=", LGRAY end
+  if code >= 51 and code <= 57 then return "Drizzle", "\25", LBLUE end
+  if (code >= 61 and code <= 67) or (code >= 80 and code <= 82) then return "Rain", "\25", LBLUE end
+  if (code >= 71 and code <= 77) or code == 85 or code == 86 then return "Snow", "*", WHITE end
+  if code >= 95 then return "Storm", "\19", YELLOW end
+  return "--", "?", GRAY
+end
+
 local function drawClock()
   local x1, x2, y1, y2 = L.cx1, L.cx2, 1, L.topH
   fill(x1 + 1, y1 + 1, x2 - 1, y2 - 1, PANEL)
@@ -563,13 +603,31 @@ local function drawClock()
   local cw = math.ceil(smallWidth(s) / 2)
   local tw = cw + 1 + 3
   local tx = x1 + 1 + math.max(0, math.floor((iw - tw) / 2))
-  local ty = y1 + 2
+  local ty = y1 + 1
   smallText(tx, ty, s, WHITE, PANEL, math.floor(mt.sec) % 2 == 0)
   text(tx + cw + 1, ty, ampm, RED, PANEL)
   text(tx + cw + 1, ty + 2, mt.dst and "MDT" or "MST", GRAY, PANEL)
   local date = DAYS[mt.wday + 1] .. ", " .. MONTHS[mt.month] .. " " .. mt.day
   if #date > iw then date = DAYS[mt.wday + 1]:sub(1, 3) .. ", " .. MONTHS[mt.month] .. " " .. mt.day end
-  text(x1 + 1 + math.floor((iw - #date) / 2), ty + 4, date, LGRAY, PANEL)
+  text(x1 + 1 + math.floor((iw - #date) / 2), ty + 3, date, LGRAY, PANEL)
+  -- Firestone weather: "Firestone  * 24°F" / "Snow  H35° L19°"
+  local deg = "\176"
+  if WX.ok then
+    local label, icon, icol = wxLook(WX.code, WX.day)
+    local temp = math.floor(WX.temp + 0.5) .. deg .. "F"
+    local l1 = "Firestone  " .. icon .. " " .. temp
+    local lx = x1 + 1 + math.floor((iw - #l1) / 2)
+    text(lx, ty + 4, "Firestone", LBLUE, PANEL)
+    text(lx + 11, ty + 4, icon, icol, PANEL)
+    text(lx + 13, ty + 4, temp, WHITE, PANEL)
+    local l2 = label
+    if WX.hi and WX.lo then l2 = l2 .. "  H" .. math.floor(WX.hi + 0.5) .. deg .. " L" .. math.floor(WX.lo + 0.5) .. deg end
+    text(x1 + 1 + math.floor((iw - #l2) / 2), ty + 5, l2, GRAY, PANEL)
+    text(x1 + 1 + math.floor((iw - #l2) / 2), ty + 5, label, icol == YELLOW and YELLOW or LGRAY, PANEL)
+  else
+    local msg = "Firestone weather..."
+    text(x1 + 1 + math.floor((iw - #msg) / 2), ty + 4, msg, GRAY, PANEL)
+  end
 end
 
 -- ---------------------------------------------------------- light blue + purple: Minecraft scene + time
@@ -1007,6 +1065,7 @@ while true do
   local ev, a, b, c = os.pullEventRaw()
   if ev == "terminate" or (ev == "key" and a == keys.q) then break
   elseif ev == "timer" and a == timer then
+    wxFetch(now())
     draw(now())
     timer = os.startTimer(CFG.frame)
   elseif ev == "rednet_message" and c == PROTO and type(b) == "table" and b.type == "beat" then
@@ -1017,6 +1076,8 @@ while true do
     if type(b.names) == "table" and #b.names ~= #lists then
       local nl = loadPlaylists(); if nl then lists = nl; UI.view = "playlists" end
     end
+  elseif (ev == "http_success" or ev == "http_failure") and a == WX_URL then
+    wxResult(ev == "http_success" and b or nil)
   elseif ev == "monitor_touch" and a == monName then
     for i = #hits, 1, -1 do
       local h = hits[i]
