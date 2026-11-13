@@ -1051,11 +1051,31 @@ while not lists do
   if not lists then message({ "Couldn't load playlists", tostring(err), "Retrying in 10s..." }); sleep(10) end
 end
 
-term.clear(); term.setCursorPos(1, 1)
-term.setTextColour(colors.yellow); print("JUKEBOX REMOTE")
-term.setTextColour(colors.white)
-print(netOn and "Modem found - talking to the jukebox." or "No modem found! Attach one to this computer.")
-print("Q = quit")
+-- the computer's own screen: status + Mountain time + Firestone weather (refreshed every ~30s)
+local function termStatus()
+  term.setBackgroundColour(colors.black)
+  term.clear(); term.setCursorPos(1, 1)
+  term.setTextColour(colors.yellow); print("JUKEBOX REMOTE")
+  term.setTextColour(colors.white)
+  print(netOn and "Modem found - talking to the jukebox." or "No modem found! Attach one to this computer.")
+  term.setTextColour(colors.lightGray); print("Q = quit")
+  local mt = mountainTime()
+  local h12 = mt.hour % 12; if h12 == 0 then h12 = 12 end
+  print("")
+  term.setTextColour(colors.white)
+  print(string.format("%d:%02d %s %s  %s, %s %d", h12, mt.min, mt.hour < 12 and "AM" or "PM", mt.dst and "MDT" or "MST",
+    DAYS[mt.wday + 1], MONTHS[mt.month], mt.day))
+  term.setTextColour(colors.lightGray)
+  if WX.ok then
+    local label = wxLook(WX.code, WX.day)
+    local hl = (WX.hi and WX.lo) and string.format("  H%d L%d", math.floor(WX.hi + 0.5), math.floor(WX.lo + 0.5)) or ""
+    print(string.format("Firestone  %d\176F %s%s", math.floor(WX.temp + 0.5), label, hl))
+  else
+    print("Firestone  loading weather...")
+  end
+end
+termStatus()
+local frames = 0
 
 send({ cmd = "hello" })
 if _G.__JB_TEST then _G.__JB = { UI = UI, J = J, hits = function() return hits end, L = L } end
@@ -1067,6 +1087,8 @@ while true do
   elseif ev == "timer" and a == timer then
     wxFetch(now())
     draw(now())
+    frames = frames + 1
+    if frames % 300 == 0 then termStatus() end
     timer = os.startTimer(CFG.frame)
   elseif ev == "rednet_message" and c == PROTO and type(b) == "table" and b.type == "beat" then
     onBeat(b, now())
@@ -1078,6 +1100,7 @@ while true do
     end
   elseif (ev == "http_success" or ev == "http_failure") and a == WX_URL then
     wxResult(ev == "http_success" and b or nil)
+    termStatus()
   elseif ev == "monitor_touch" and a == monName then
     for i = #hits, 1, -1 do
       local h = hits[i]

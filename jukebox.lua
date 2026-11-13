@@ -390,6 +390,101 @@ local function ensureVisible(i)
   end
 end
 
+-- ---------------------------------------------------------- Mountain Time clock + live weather (Open-Meteo, free, no key)
+local function civil(days)
+  local z = days + 719468
+  local era = math.floor(z / 146097)
+  local doe = z - era * 146097
+  local yoe = math.floor((doe - math.floor(doe / 1460) + math.floor(doe / 36524) - math.floor(doe / 146096)) / 365)
+  local doy = doe - (365 * yoe + math.floor(yoe / 4) - math.floor(yoe / 100))
+  local mp = math.floor((5 * doy + 2) / 153)
+  local d = doy - math.floor((153 * mp + 2) / 5) + 1
+  local m = mp < 10 and mp + 3 or mp - 9
+  local y = yoe + era * 400
+  if m <= 2 then y = y + 1 end
+  return y, m, d
+end
+local function daysFromCivil(y, m, d)
+  if m <= 2 then y = y - 1 end
+  local era = math.floor(y / 400)
+  local yoe = y - era * 400
+  local mp = m > 2 and m - 3 or m + 9
+  local doy = math.floor((153 * mp + 2) / 5) + d - 1
+  return era * 146097 + yoe * 365 + math.floor(yoe / 4) - math.floor(yoe / 100) + doy - 719468
+end
+local function nthSunday(y, m, n)
+  local d1 = daysFromCivil(y, m, 1)
+  return d1 + (7 - (d1 + 4) % 7) % 7 + (n - 1) * 7
+end
+local function mountainTime()
+  local utc = math.floor(os.epoch("utc") / 1000)
+  local y = civil(math.floor(utc / 86400))
+  local dst = utc >= nthSunday(y, 3, 2) * 86400 + 9 * 3600 and utc < nthSunday(y, 11, 1) * 86400 + 8 * 3600
+  local t = utc + (dst and -6 or -7) * 3600
+  local days = math.floor(t / 86400)
+  local yy, mm, dd = civil(days)
+  local secs = t - days * 86400
+  local hour = math.floor(secs / 3600)
+  local h12 = hour % 12; if h12 == 0 then h12 = 12 end
+  return { month = mm, day = dd, wday = (days + 4) % 7, hour = hour, min = math.floor(secs / 60) % 60,
+           sec = secs % 60, dst = dst, h12 = h12, ampm = hour < 12 and "AM" or "PM" }
+end
+local DAYS = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" }
+local MONTHS = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" }
+
+local function wxURL(lat, lon)
+  return "https://api.open-meteo.com/v1/forecast?latitude=" .. lat .. "&longitude=" .. lon ..
+    "&current=temperature_2m,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min" ..
+    "&temperature_unit=fahrenheit&timezone=America%2FDenver&forecast_days=1"
+end
+local CITIES = {
+  { name = "HERRIMAN, UT", short = "Herriman", url = wxURL("40.5141", "-112.0330"), col = YELLOW },
+  { name = "FIRESTONE, CO", short = "Firestone", url = wxURL("40.1125", "-104.9366"), col = LBLUE },
+}
+for _, c in ipairs(CITIES) do c.at, c.pending, c.ok = -1e9, false, false end
+local function wxFetch(t)
+  for _, c in ipairs(CITIES) do
+    if not c.pending and t - c.at >= (c.ok and 600 or 60) then   -- every 10 min (retry each minute until it works)
+      c.pending, c.at = true, t
+      if not pcall(http.request, c.url) then c.pending = false end
+    end
+  end
+end
+local function wxResult(url, handle)
+  for _, c in ipairs(CITIES) do
+    if c.url == url then
+      c.pending = false
+      if handle then
+        local ok, data = pcall(textutils.unserializeJSON, handle.readAll())
+        handle.close()
+        if ok and type(data) == "table" and type(data.current) == "table" then
+          c.temp = tonumber(data.current.temperature_2m)
+          c.code = tonumber(data.current.weather_code) or 0
+          c.day = data.current.is_day == 1
+          local d = type(data.daily) == "table" and data.daily or {}
+          c.hi = type(d.temperature_2m_max) == "table" and tonumber(d.temperature_2m_max[1]) or nil
+          c.lo = type(d.temperature_2m_min) == "table" and tonumber(d.temperature_2m_min[1]) or nil
+          c.ok = c.temp ~= nil
+        end
+      end
+      return true
+    end
+  end
+end
+-- WMO weather code -> short label, icon, icon colour
+local function wxLook(code, day)
+  if code == 0 then return day and "Sunny" or "Clear", day and "\15" or "\7", day and YELLOW or WHITE end
+  if code <= 2 then return "Partly cloudy", day and "\15" or "\7", day and YELLOW or LGRAY end
+  if code == 3 then return "Cloudy", "\22", LGRAY end
+  if code == 45 or code == 48 then return "Fog", "=", LGRAY end
+  if code >= 51 and code <= 57 then return "Drizzle", "\25", LBLUE end
+  if (code >= 61 and code <= 67) or (code >= 80 and code <= 82) then return "Rain", "\25", LBLUE end
+  if (code >= 71 and code <= 77) or code == 85 or code == 86 then return "Snow", "*", WHITE end
+  if code >= 95 then return "Storm", "\19", YELLOW end
+  return "--", "?", GRAY
+end
+local DEG = "\176"
+
 local function termStatus()
   term.setBackgroundColour(colors.black)
   term.clear(); term.setCursorPos(1, 1)
@@ -405,6 +500,22 @@ local function termStatus()
   print("Space = pause   Left/Right = prev/next")
   print("P = screen power on/off")
   print("Q = quit")
+  -- time + weather on the computer's own screen
+  local mt = mountainTime()
+  print("")
+  term.setTextColour(colors.white)
+  print(string.format("%d:%02d %s %s  %s, %s %d", mt.h12, mt.min, mt.ampm, mt.dst and "MDT" or "MST",
+    DAYS[mt.wday + 1], MONTHS[mt.month], mt.day))
+  for _, c in ipairs(CITIES) do
+    term.setTextColour(colors.lightGray)
+    if c.ok then
+      local label = wxLook(c.code, c.day)
+      local hl = (c.hi and c.lo) and string.format("  H%d L%d", math.floor(c.hi + 0.5), math.floor(c.lo + 0.5)) or ""
+      print(string.format("%-10s %d" .. DEG .. "F %s%s", c.short, math.floor(c.temp + 0.5), label, hl))
+    else
+      print(string.format("%-10s loading weather...", c.short))
+    end
+  end
 end
 
 local function playSong(pl, si, fromQueue)
@@ -1031,6 +1142,38 @@ local function drawOff()
   present()
 end
 
+-- clock + weather strip under the controls (layout option A)
+local function drawWeatherStrip()
+  local y1, y2 = H - 1, H
+  if y1 <= L.by2 then return end                       -- no room on very small monitors
+  fill(L.rx1, y1, W, y2, PANEL)
+  local mt = mountainTime()
+  local x = L.rx1 + 2
+  local tm = mt.h12 .. ":" .. string.format("%02d", mt.min) .. " " .. mt.ampm
+  text(x, y1, tm, WHITE, PANEL)
+  text(x + #tm + 1, y1, mt.dst and "MDT" or "MST", GRAY, PANEL)
+  text(x, y2, DAYS[mt.wday + 1]:sub(1, 3) .. ", " .. MONTHS[mt.month] .. " " .. mt.day, LGRAY, PANEL)
+  local colW = math.floor((W - (L.rx1 + 22)) / 2)
+  for i, c in ipairs(CITIES) do
+    local cx = L.rx1 + 22 + (i - 1) * colW
+    text(cx, y1, c.name, c.col, PANEL)
+    if c.ok then
+      local label, icon, icol = wxLook(c.code, c.day)
+      local wx = cx + #c.name + 2
+      text(wx, y1, icon, icol, PANEL)
+      local rest = math.floor(c.temp + 0.5) .. DEG .. "F " .. label
+      local room = cx + colW - 2 - (wx + 2)
+      if #rest > room then rest = rest:sub(1, room) end
+      text(wx + 2, y1, rest, WHITE, PANEL)
+      if c.hi and c.lo then
+        text(cx, y2, "High " .. math.floor(c.hi + 0.5) .. DEG .. "  Low " .. math.floor(c.lo + 0.5) .. DEG, LGRAY, PANEL)
+      end
+    else
+      text(cx, y2, "loading weather...", GRAY, PANEL)
+    end
+  end
+end
+
 local function draw(dt, t)
   fbClear()
   hits = {}
@@ -1048,6 +1191,7 @@ local function draw(dt, t)
   drawProgress()
   drawControls()
   powerButton()
+  drawWeatherStrip()
   present()
 end
 
@@ -1227,10 +1371,12 @@ local function renderLoop()
     local _, id = os.pullEventRaw("timer")
     if id == timer then
       local t = now()
+      wxFetch(t)
       if UI.power then
         draw(math.min(0.5, t - last), t)
         sendBeat(t)
       end
+      if frames % 300 == 0 then termStatus() end            -- refresh the computer's own screen every ~30s
       last = t
       frames = frames + 1
       if frames % 5 == 0 then sendState() end
@@ -1257,6 +1403,8 @@ local function inputLoop()
     if ev == "terminate" then return
     elseif ev == "monitor_touch" and monByName[a] then handleTouch(b, c); sendState()
     elseif ev == "rednet_message" and c == PROTO then handleRemote(b)
+    elseif (ev == "http_success" or ev == "http_failure") and wxResult(a, ev == "http_success" and b or nil) then
+      termStatus()                                            -- weather arrived: refresh the computer's screen
     elseif (ev == "monitor_resize" and monByName[a]) or ev == "peripheral" or ev == "peripheral_detach" then
       if ev ~= "monitor_resize" then
         local found = { peripheral.find("speaker") }
