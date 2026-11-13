@@ -438,8 +438,8 @@ local function wxURL(lat, lon)
     "&temperature_unit=fahrenheit&timezone=America%2FDenver&forecast_days=1"
 end
 local CITIES = {
-  { name = "HERRIMAN, UT", short = "Herriman", url = wxURL("40.5141", "-112.0330"), col = YELLOW },
-  { name = "FIRESTONE, CO", short = "Firestone", url = wxURL("40.1125", "-104.9366"), col = LBLUE },
+  { name = "HERRIMAN, UT", short = "Herriman", url = wxURL("40.5141", "-112.0330"), col = LBLUE },
+  { name = "FIRESTONE, CO", short = "Firestone", url = wxURL("40.1125", "-104.9366"), col = RED },
 }
 for _, c in ipairs(CITIES) do c.at, c.pending, c.ok = -1e9, false, false end
 local function wxFetch(t)

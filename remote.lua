@@ -617,7 +617,7 @@ local function drawClock()
     local temp = math.floor(WX.temp + 0.5) .. deg .. "F"
     local l1 = "Firestone  " .. icon .. " " .. temp
     local lx = x1 + 1 + math.floor((iw - #l1) / 2)
-    text(lx, ty + 4, "Firestone", LBLUE, PANEL)
+    text(lx, ty + 4, "Firestone", RED, PANEL)
     text(lx + 11, ty + 4, icon, icol, PANEL)
     text(lx + 13, ty + 4, temp, WHITE, PANEL)
     local l2 = label
