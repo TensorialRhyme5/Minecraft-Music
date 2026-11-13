@@ -444,20 +444,29 @@ local CITIES = {
 for _, c in ipairs(CITIES) do c.at, c.pending, c.ok = -1e9, false, false end
 local function wxFetch(t)
   for _, c in ipairs(CITIES) do
+    if c.pending and t - c.at > 30 then c.pending = false; c.err = "no reply (timed out)" end
     if not c.pending and t - c.at >= (c.ok and 600 or 60) then   -- every 10 min (retry each minute until it works)
       c.pending, c.at = true, t
-      if not pcall(http.request, c.url) then c.pending = false end
+      local ok, res, why = pcall(http.request, c.url)
+      if not ok or res == false then                           -- refused straight away (e.g. site not allowed)
+        c.pending = false
+        c.err = tostring(not ok and res or why or "request refused")
+      end
     end
   end
 end
-local function wxResult(url, handle)
+local function wxResult(url, handle, why)
   for _, c in ipairs(CITIES) do
     if c.url == url then
       c.pending = false
+      if not handle then c.err = tostring(why or "request failed") end
       if handle then
-        local ok, data = pcall(textutils.unserializeJSON, handle.readAll())
+        local body = handle.readAll()
         handle.close()
+        local ok, data = pcall(textutils.unserializeJSON, body)
+        if not (ok and type(data) == "table" and type(data.current) == "table") then c.err = "couldn't read weather data" end
         if ok and type(data) == "table" and type(data.current) == "table" then
+          c.err = nil
           c.temp = tonumber(data.current.temperature_2m)
           c.code = tonumber(data.current.weather_code) or 0
           c.day = data.current.is_day == 1
@@ -514,6 +523,7 @@ local function termStatus()
       print(string.format("%-10s %d" .. DEG .. "F %s%s", c.short, math.floor(c.temp + 0.5), label, hl))
     else
       print(string.format("%-10s loading weather...", c.short))
+      if c.err then term.setTextColour(colors.red); print("  error: " .. c.err) end
     end
   end
 end
@@ -1169,7 +1179,13 @@ local function drawWeatherStrip()
         text(cx, y2, "High " .. math.floor(c.hi + 0.5) .. DEG .. "  Low " .. math.floor(c.lo + 0.5) .. DEG, LGRAY, PANEL)
       end
     else
-      text(cx, y2, "loading weather...", GRAY, PANEL)
+      if c.err then
+        local e = c.err
+        if #e > colW - 2 then e = e:sub(1, colW - 2) end
+        text(cx, y2, e, RED, PANEL)
+      else
+        text(cx, y2, "loading weather...", GRAY, PANEL)
+      end
     end
   end
 end
@@ -1403,7 +1419,7 @@ local function inputLoop()
     if ev == "terminate" then return
     elseif ev == "monitor_touch" and monByName[a] then handleTouch(b, c); sendState()
     elseif ev == "rednet_message" and c == PROTO then handleRemote(b)
-    elseif (ev == "http_success" or ev == "http_failure") and wxResult(a, ev == "http_success" and b or nil) then
+    elseif (ev == "http_success" or ev == "http_failure") and wxResult(a, ev == "http_success" and b or nil, ev == "http_failure" and b or nil) then
       termStatus()                                            -- weather arrived: refresh the computer's screen
     elseif (ev == "monitor_resize" and monByName[a]) or ev == "peripheral" or ev == "peripheral_detach" then
       if ev ~= "monitor_resize" then

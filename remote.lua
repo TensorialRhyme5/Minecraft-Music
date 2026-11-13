@@ -557,18 +557,28 @@ local WX_URL = "https://api.open-meteo.com/v1/forecast?latitude=40.1125&longitud
   "&temperature_unit=fahrenheit&timezone=America%2FDenver&forecast_days=1"
 local WX = { at = -1e9, pending = false, ok = false }
 local function wxFetch(t)
+  if WX.pending and t - WX.at > 30 then WX.pending = false; WX.err = "no reply (timed out)" end
   if WX.pending then return end
   local wait = WX.ok and 600 or 60                         -- every 10 min (retry each minute until it works)
   if t - WX.at < wait then return end
   WX.pending, WX.at = true, t
-  if not pcall(http.request, WX_URL) then WX.pending = false end
+  local ok, res, why = pcall(http.request, WX_URL)
+  if not ok or res == false then                           -- refused straight away (e.g. site not allowed)
+    WX.pending = false
+    WX.err = tostring(not ok and res or why or "request refused")
+  end
 end
-local function wxResult(handle)
+local function wxResult(handle, why)
   WX.pending = false
-  if not handle then return end
-  local ok, data = pcall(textutils.unserializeJSON, handle.readAll())
+  if not handle then WX.err = tostring(why or "request failed"); return end
+  local body = handle.readAll()
   handle.close()
+  local ok, data = pcall(textutils.unserializeJSON, body)
+  if not (ok and type(data) == "table" and type(data.current) == "table") then
+    WX.err = "couldn't read weather data"
+  end
   if ok and type(data) == "table" and type(data.current) == "table" then
+    WX.err = nil
     WX.temp = tonumber(data.current.temperature_2m)
     WX.code = tonumber(data.current.weather_code) or 0
     WX.day = data.current.is_day == 1
@@ -627,6 +637,11 @@ local function drawClock()
   else
     local msg = "Firestone weather..."
     text(x1 + 1 + math.floor((iw - #msg) / 2), ty + 4, msg, GRAY, PANEL)
+    if WX.err then                                          -- show why it isn't loading
+      local e = WX.err
+      if #e > iw then e = e:sub(1, iw) end
+      text(x1 + 1 + math.floor((iw - #e) / 2), ty + 5, e, RED, PANEL)
+    end
   end
 end
 
@@ -1072,6 +1087,7 @@ local function termStatus()
     print(string.format("Firestone  %d\176F %s%s", math.floor(WX.temp + 0.5), label, hl))
   else
     print("Firestone  loading weather...")
+    if WX.err then term.setTextColour(colors.red); print("Weather error: " .. WX.err) end
   end
 end
 termStatus()
@@ -1099,7 +1115,7 @@ while true do
       local nl = loadPlaylists(); if nl then lists = nl; UI.view = "playlists" end
     end
   elseif (ev == "http_success" or ev == "http_failure") and a == WX_URL then
-    wxResult(ev == "http_success" and b or nil)
+    if ev == "http_success" then wxResult(b) else wxResult(nil, b) end
     termStatus()
   elseif ev == "monitor_touch" and a == monName then
     for i = #hits, 1, -1 do
