@@ -3371,5 +3371,455 @@
       "bpm": 89,
       "theme": "waves"
     }
+  ],
+  "MONSTERCAT": [
+    {
+      "title": "About U",
+      "artist": "Aiobahn & Vin",
+      "file": "monstercat/aiobahn-vin-about-u-monstercat-release-monstercat-instinct.dfpwm",
+      "bpm": 123,
+      "theme": "waves"
+    },
+    {
+      "title": "Adventures",
+      "artist": "Hyper Potions",
+      "file": "monstercat/adventures-hyper-potions.dfpwm",
+      "bpm": 108,
+      "theme": "waves"
+    },
+    {
+      "title": "Airglow",
+      "artist": "Laszlo",
+      "file": "monstercat/airglow-laszlo.dfpwm",
+      "bpm": 123,
+      "theme": "hype"
+    },
+    {
+      "title": "Amnesia",
+      "artist": "Pixel Terror",
+      "file": "monstercat/pixel-terror-amnesia-monstercat-release-monstercat-uncaged.dfpwm",
+      "bpm": 96,
+      "theme": "waves"
+    },
+    {
+      "title": "Are We Still Young (feat. Jessi Mason)",
+      "artist": "Grant",
+      "file": "monstercat/are-we-still-young-feat-jessi-mason-grantsongs.dfpwm",
+      "bpm": 112,
+      "theme": "waves"
+    },
+    {
+      "title": "Awake (feat. Colordrive)",
+      "artist": "WRLD",
+      "file": "monstercat/awake-feat-colordrive-wrld.dfpwm",
+      "bpm": 96,
+      "theme": "classic"
+    },
+    {
+      "title": "Badlands",
+      "artist": "Rogue",
+      "file": "monstercat/rogue-badlands-monstercat-release-monstercat-instinct.dfpwm",
+      "bpm": 117,
+      "theme": "waves"
+    },
+    {
+      "title": "Blast",
+      "artist": "TOKYO MACHINE",
+      "file": "monstercat/blast-tokyo-machine.dfpwm",
+      "bpm": 129,
+      "theme": "hype"
+    },
+    {
+      "title": "Bone Dry",
+      "artist": "Tristam",
+      "file": "monstercat/tristam-bone-dry-monstercat-release-monstercat-uncaged.dfpwm",
+      "bpm": 108,
+      "theme": "chill"
+    },
+    {
+      "title": "Break Me (feat. Karra)",
+      "artist": "Trivecta",
+      "file": "monstercat/trivecta-break-me-feat-karra-monstercat-release-monstercat-u.dfpwm",
+      "bpm": 103,
+      "theme": "waves"
+    },
+    {
+      "title": "Break The Silence",
+      "artist": "Richard Caddock, WRLD, Nitro Fun, Slippy & Subtact",
+      "file": "monstercat/future-bass-richard-caddock-wrld-nitro-fun-slippy-subtact-br.dfpwm",
+      "bpm": 96,
+      "theme": "chill"
+    },
+    {
+      "title": "Bubbles",
+      "artist": "TOKYO MACHINE",
+      "file": "monstercat/bubbles-tokyo-machine.dfpwm",
+      "bpm": 129,
+      "theme": "hype"
+    },
+    {
+      "title": "Buzz Lightyear (WRLD Remix)",
+      "artist": "GWAVA",
+      "file": "monstercat/buzz-lightyear-wrld-remix-gwava.dfpwm",
+      "bpm": 123,
+      "theme": "waves"
+    },
+    {
+      "title": "By Design",
+      "artist": "WRLD",
+      "file": "monstercat/by-design-wrld.dfpwm",
+      "bpm": 117,
+      "theme": "chill"
+    },
+    {
+      "title": "Castaway (feat. Jessi Mason)",
+      "artist": "Grant",
+      "file": "monstercat/grant-castaway-feat-jessi-mason-monstercat-lyric-video-monst.dfpwm",
+      "bpm": 108,
+      "theme": "waves"
+    },
+    {
+      "title": "Chase It (feat. Savoi)",
+      "artist": "WRLD",
+      "file": "monstercat/chase-it-feat-savoi-wrld.dfpwm",
+      "bpm": 112,
+      "theme": "waves"
+    },
+    {
+      "title": "Cheat Codes",
+      "artist": "Nitro Fun",
+      "file": "monstercat/cheat-codes-nitro-fun.dfpwm",
+      "bpm": 129,
+      "theme": "classic"
+    },
+    {
+      "title": "Collapse",
+      "artist": "Pixel Terror",
+      "file": "monstercat/collapse-pixel-terror.dfpwm",
+      "bpm": 103,
+      "theme": "chill"
+    },
+    {
+      "title": "Cookies",
+      "artist": "TOKYO MACHINE",
+      "file": "monstercat/cookies-tokyo-machine.dfpwm",
+      "bpm": 129,
+      "theme": "hype"
+    },
+    {
+      "title": "Dreamer",
+      "artist": "Throttle",
+      "file": "drugs-for-pete/dreamer-throttle.dfpwm",
+      "bpm": 123,
+      "theme": "waves"
+    },
+    {
+      "title": "Dreamstate",
+      "artist": "Ephixa",
+      "file": "monstercat/dreamstate-djephixa.dfpwm",
+      "bpm": 123,
+      "theme": "chill"
+    },
+    {
+      "title": "Drift Away",
+      "artist": "WRLD",
+      "file": "monstercat/wrld-drift-away-monstercat-release-monstercat-uncaged.dfpwm",
+      "bpm": 117,
+      "theme": "classic"
+    },
+    {
+      "title": "EPIC",
+      "artist": "TOKYO MACHINE",
+      "file": "monstercat/epic-tokyo-machine.dfpwm",
+      "bpm": 129,
+      "theme": "classic"
+    },
+    {
+      "title": "Expedition",
+      "artist": "Hyper Potions & Nokae",
+      "file": "monstercat/hyper-potions-nokae-expedition-monstercat-release-monstercat.dfpwm",
+      "bpm": 108,
+      "theme": "chill"
+    },
+    {
+      "title": "Float Away",
+      "artist": "Grabbitz",
+      "file": "monstercat/float-away-grabbitz.dfpwm",
+      "bpm": 99,
+      "theme": "waves"
+    },
+    {
+      "title": "Flow",
+      "artist": "Slippy",
+      "file": "monstercat/slippy-flow-monstercat-release-monstercat-uncaged.dfpwm",
+      "bpm": 103,
+      "theme": "waves"
+    },
+    {
+      "title": "For Me",
+      "artist": "Throttle",
+      "file": "drugs-for-pete/for-me-throttle.dfpwm",
+      "bpm": 129,
+      "theme": "waves"
+    },
+    {
+      "title": "Glide",
+      "artist": "Stephen Walking",
+      "file": "monstercat/stephen-walking-glide-monstercat-release-monstercat-instinct.dfpwm",
+      "bpm": 136,
+      "theme": "classic"
+    },
+    {
+      "title": "Hang Up",
+      "artist": "WRLD",
+      "file": "monstercat/hang-up-wrld.dfpwm",
+      "bpm": 117,
+      "theme": "waves"
+    },
+    {
+      "title": "Hideaway",
+      "artist": "Savoi",
+      "file": "monstercat/hideaway-savoi.dfpwm",
+      "bpm": 99,
+      "theme": "waves"
+    },
+    {
+      "title": "High Tide",
+      "artist": "Grant",
+      "file": "monstercat/high-tide-grantsongs.dfpwm",
+      "bpm": 103,
+      "theme": "waves"
+    },
+    {
+      "title": "Home",
+      "artist": "Nitro Fun",
+      "file": "monstercat/home-nitro-fun.dfpwm",
+      "bpm": 76,
+      "theme": "chill"
+    },
+    {
+      "title": "Hype",
+      "artist": "TOKYO MACHINE",
+      "file": "monstercat/hype-tokyo-machine.dfpwm",
+      "bpm": 129,
+      "theme": "hype"
+    },
+    {
+      "title": "Japan",
+      "artist": "Throttle",
+      "file": "drugs-for-pete/japan-throttle.dfpwm",
+      "bpm": 123,
+      "theme": "waves"
+    },
+    {
+      "title": "Last Summer",
+      "artist": "TOKYO MACHINE",
+      "file": "monstercat/last-summer-tokyo-machine.dfpwm",
+      "bpm": 144,
+      "theme": "classic"
+    },
+    {
+      "title": "LUV U NEED U",
+      "artist": "Slushii",
+      "file": "monstercat/luv-u-need-u-slushii.dfpwm",
+      "bpm": 144,
+      "theme": "hype"
+    },
+    {
+      "title": "Mark Twain",
+      "artist": "GWAVA",
+      "file": "monstercat/mark-twain-gwava.dfpwm",
+      "bpm": 92,
+      "theme": "chill"
+    },
+    {
+      "title": "My Love",
+      "artist": "Koven",
+      "file": "monstercat/koven-my-love-monstercat-release-monstercat-uncaged.dfpwm",
+      "bpm": 117,
+      "theme": "waves"
+    },
+    {
+      "title": "New Game",
+      "artist": "Nitro Fun",
+      "file": "monstercat/new-game-nitro-fun.dfpwm",
+      "bpm": 129,
+      "theme": "hype"
+    },
+    {
+      "title": "Oh You",
+      "artist": "Rootkit",
+      "file": "monstercat/rootkit-oh-you-monstercat-release-monstercat-instinct.dfpwm",
+      "bpm": 117,
+      "theme": "rain"
+    },
+    {
+      "title": "Outbreak (feat. MYLK)",
+      "artist": "Feint",
+      "file": "monstercat/feint-outbreak-feat-mylk-monstercat-release-monstercat-uncag.dfpwm",
+      "bpm": 117,
+      "theme": "classic"
+    },
+    {
+      "title": "Paradigm",
+      "artist": "Bad Computer",
+      "file": "monstercat/paradigm-bad-computer.dfpwm",
+      "bpm": 129,
+      "theme": "waves"
+    },
+    {
+      "title": "Party Freaks (feat. Anna Yvette)",
+      "artist": "Pegboard Nerds",
+      "file": "monstercat/pegboard-nerds-party-freaks-feat-anna-yvette-monstercat-rele.dfpwm",
+      "bpm": 129,
+      "theme": "waves"
+    },
+    {
+      "title": "Pink Cloud (feat. Max Collins)",
+      "artist": "Pegboard Nerds",
+      "file": "monstercat/pink-cloud-feat-max-collins-pegboard-nerds.dfpwm",
+      "bpm": 108,
+      "theme": "waves"
+    },
+    {
+      "title": "Pixel",
+      "artist": "TOKYO MACHINE",
+      "file": "monstercat/pixel-tokyo-machine.dfpwm",
+      "bpm": 129,
+      "theme": "hype"
+    },
+    {
+      "title": "PLAY",
+      "artist": "TOKYO MACHINE",
+      "file": "monstercat/tokyo-machine-play-monstercat-release-monstercat-uncaged.dfpwm",
+      "bpm": 129,
+      "theme": "hype"
+    },
+    {
+      "title": "Play To Win (Feat. Holly Drummond)",
+      "artist": "Rameses B",
+      "file": "monstercat/rameses-b-play-to-win-feat-holly-drummond-rameses-b.dfpwm",
+      "bpm": 129,
+      "theme": "waves"
+    },
+    {
+      "title": "ROCK IT",
+      "artist": "TOKYO MACHINE",
+      "file": "monstercat/rock-it-tokyo-machine.dfpwm",
+      "bpm": 129,
+      "theme": "hype"
+    },
+    {
+      "title": "Runnin (feat. Nick Smith)",
+      "artist": "SMLE",
+      "file": "monstercat/smle-runnin-feat-nick-smith-monstercat-release-monstercat-in.dfpwm",
+      "bpm": 117,
+      "theme": "waves"
+    },
+    {
+      "title": "Shiawase",
+      "artist": "Dion Timmer",
+      "file": "monstercat/dion-timmer-shiawase-monstercat-release-monstercat-instinct.dfpwm",
+      "bpm": 99,
+      "theme": "classic"
+    },
+    {
+      "title": "Silhouette (feat. Skyelle)",
+      "artist": "Bad Computer",
+      "file": "monstercat/bad-computer-silhouette-feat-skyelle-monstercat-release-mons.dfpwm",
+      "bpm": 129,
+      "theme": "waves"
+    },
+    {
+      "title": "Solar Eclipses",
+      "artist": "Hollywood Principle",
+      "file": "monstercat/solar-eclipses-hollywood-principle.dfpwm",
+      "bpm": 129,
+      "theme": "waves"
+    },
+    {
+      "title": "Stranded",
+      "artist": "SMLE",
+      "file": "monstercat/stranded-smle.dfpwm",
+      "bpm": 86,
+      "theme": "chill"
+    },
+    {
+      "title": "Style",
+      "artist": "WRLD",
+      "file": "monstercat/style-wrld.dfpwm",
+      "bpm": 99,
+      "theme": "chill"
+    },
+    {
+      "title": "This Feeling",
+      "artist": "Noisestorm",
+      "file": "monstercat/this-feeling-noisestorm.dfpwm",
+      "bpm": 129,
+      "theme": "waves"
+    },
+    {
+      "title": "Twilight",
+      "artist": "Zero Hero",
+      "file": "monstercat/zero-hero-twilight-kyra.dfpwm",
+      "bpm": 161,
+      "theme": "hype"
+    },
+    {
+      "title": "Wake Up, You're Dreaming",
+      "artist": "Notaker",
+      "file": "monstercat/notaker-wake-up-you-re-dreaming-tasty.dfpwm",
+      "bpm": 103,
+      "theme": "rain"
+    },
+    {
+      "title": "Want You",
+      "artist": "Orbiter",
+      "file": "monstercat/want-you-orbiter.dfpwm",
+      "bpm": 99,
+      "theme": "chill"
+    },
+    {
+      "title": "We Are the Lights",
+      "artist": "Varien",
+      "file": "chill-vibes-2/we-are-the-lights-varien.dfpwm",
+      "bpm": 108,
+      "theme": "waves"
+    },
+    {
+      "title": "Weapon (feat. Baum)",
+      "artist": "Grant",
+      "file": "monstercat/grant-weapon-feat-baum-monstercat-release-monstercat-uncaged.dfpwm",
+      "bpm": 92,
+      "theme": "waves"
+    },
+    {
+      "title": "Where U Are",
+      "artist": "Throttle",
+      "file": "drugs-for-pete/where-u-are-throttle.dfpwm",
+      "bpm": 117,
+      "theme": "classic"
+    },
+    {
+      "title": "Wildfire",
+      "artist": "Rootkit",
+      "file": "monstercat/wildfire-rootkit.dfpwm",
+      "bpm": 108,
+      "theme": "waves"
+    },
+    {
+      "title": "Wishes",
+      "artist": "Grant",
+      "file": "monstercat/wishes-grantsongs.dfpwm",
+      "bpm": 103,
+      "theme": "rain"
+    },
+    {
+      "title": "Without You (feat. Victoria Zaro)",
+      "artist": "Grant",
+      "file": "monstercat/without-you-feat-victoria-zaro-grantsongs.dfpwm",
+      "bpm": 96,
+      "theme": "waves"
+    }
   ]
 }
