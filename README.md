@@ -47,3 +47,13 @@ Only paired devices can control the jukebox. Anyone can still *see* what's playi
 - **Pocket:** MUSIC tab > **SEARCH**.
 
 Tapping a song plays it if nothing is on; otherwise it goes into the queue (tap again to take it out).
+
+## Welcome back + song of the day
+
+- When someone walks into the base, both main screens show a big message for 5 seconds and a chime plays over the
+  music: **WELCOME BACK** for friends (TEN, Haydog098), **VISITOR** for anyone else. Someone has to be gone a minute
+  before they're welcomed again, and nobody is welcomed just because the jukebox rebooted.
+- The base area is `WEL.BOX` near the top of `jukebox.lua` (two corners). Until it's set, anyone within 40 blocks of
+  the Player Detector counts.
+- **Song of the day** is on the CONTROL panel (with PLAY / QUEUE IT), the remote and the pocket. It changes at
+  midnight Mountain Time and is the same on every screen.

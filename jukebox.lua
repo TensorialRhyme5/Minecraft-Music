@@ -613,6 +613,8 @@ end
   end
 end
 
+local WEL, SOTD                        -- (filled in further down)
+local queuePos, requestSong              -- (defined further down)
 local P, pollWorld, tpsLoop, panelData, drawControl, screenButton
 do
 P = { storage = nil, storageAt = -1e9, seen = {}, players = nil, near = {}, hasDet = false, hasEnv = false, tps = nil }
@@ -675,6 +677,7 @@ panelData = function()
     date = DAYS[mt.wday + 1]:sub(1, 3) .. ", " .. MONTHS[mt.month] .. " " .. mt.day, wx = wx,
     players = players, hasDet = P.hasDet, game = { time = gt, day = gd, rain = P.rain, thunder = P.thunder, hasEnv = P.hasEnv },
     tps = P.tps, storage = storageOK() and P.storage or nil,
+    sotd = (function() local d = SOTD and SOTD.get(); return d and { title = d.title, artist = d.artist, pl = d.pl, si = d.si } end)(),
     dev = { storage = storageOK(), crafter = storageOK() and P.storage.crafter == true, zone = online("zone"), remote = online("remote") } }
 end
 local function tpsLook(tps)
@@ -749,6 +752,16 @@ drawControl = function(t)
     else
       text(cx + 2, top + 2, fitT(c.err or "loading weather...", cw - 3), c.err and RED or GRAY, PANEL)
     end
+  end
+  -- song of the day, in the gap under the top row
+  local sd = SOTD and SOTD.get()
+  if sd then
+    local sy = top + rowH
+    local label = "SONG OF THE DAY"
+    text(x1 + 1, sy, label, YELLOW)
+    local line = sd.title .. (sd.artist ~= "" and ("  -  " .. sd.artist) or "")
+    text(x1 + #label + 3, sy, fitT(line, x2 - x1 - #label - 16), WHITE)
+    button("sotd", x2 - 10, sy, x2, sy, S.song and "QUEUE IT" or "PLAY", BLACK, YELLOW, function() requestSong({ pl = sd.pl, si = sd.si }) end)
   end
   -- row 2: players | minecraft + devices
   local y2a = top + rowH + 1
@@ -856,7 +869,7 @@ drawControl = function(t)
     for i = 1, bw do setCell(x1 + 1 + i, sy1 + 1, " ", WHITE, i <= f and (pct > 0.9 and RED or (pct > 0.75 and YELLOW or LIME)) or GRAY) end
     text(ix2 - #pctS + 1, sy1 + 1, pctS, WHITE, PANEL)
     text(x1 + 2, sy1 + 2, fitT(commasN(st.total) .. " items   " .. commasN(st.types) .. " kinds   " .. commasN(st.used) .. "/" .. commasN(st.slots) .. " slots", ix2 - x1 - 1), LGRAY, PANEL)
-    text(x1 + 2, sy1 + 3, fitT(st.busy or st.msg or "", ix2 - x1 - 1), st.busy and YELLOW or WHITE, PANEL)
+    text(x1 + 2, sy1 + 3, fitT(st.busy or st.smelt or st.msg or "", ix2 - x1 - 1), (st.busy or st.smelt) and YELLOW or WHITE, PANEL)
     local low = type(st.low) == "table" and st.low or {}
     if #low == 0 then text(x1 + 2, sy1 + 4, "Low stock: none", GRAY, PANEL)
     else
@@ -872,8 +885,132 @@ drawControl = function(t)
 end
 end
 
+-- ---------------------------------------------------------- welcome back (chime + message) and song of the day
+do
+  -- Friends get "WELCOME BACK"; anyone else gets "VISITOR". The base is a box between two corners
+  -- (x, y, z). Until it's filled in, anyone within FALLBACK blocks of the Player Detector counts.
+  WEL = {
+    BOX = nil,                        -- e.g. { { x = 100, y = 60, z = -40 }, { x = 160, y = 120, z = 20 } }
+    FALLBACK = 40,
+    FRIENDS = { TensorialRhyme5 = "TEN", Haydog098 = "Haydog098" },
+    AWAY = 60,                        -- seconds someone must be gone before they're welcomed again
+    inside = {}, lastSeen = {}, queue = {}, showUntil = 0, cur = nil,
+  }
+  function WEL.poll()
+    local det = peripheral.find("player_detector") or peripheral.find("playerDetector")
+    if not det then return end
+    local ok, list
+    if WEL.BOX then ok, list = pcall(det.getPlayersInCoords, WEL.BOX[1], WEL.BOX[2])
+    else ok, list = pcall(det.getPlayersInRange, WEL.FALLBACK) end
+    if not ok or type(list) ~= "table" then return end
+    local t = now()
+    local here = {}
+    for _, n in pairs(list) do
+      if type(n) == "string" then
+        here[n] = true
+        if not WEL.inside[n] and t - (WEL.lastSeen[n] or -1e9) > WEL.AWAY and WEL.started then
+          WEL.queue[#WEL.queue + 1] = { name = n, friend = WEL.FRIENDS[n] ~= nil }
+        end
+        WEL.lastSeen[n] = t
+      end
+    end
+    WEL.inside = here
+    WEL.started = true                -- nobody gets welcomed just because the jukebox rebooted
+  end
+  -- ding-dong, made once: two bell notes with a few overtones, fading out (48 kHz, -128..127)
+  local CH = { pcm = nil, pos = 0, on = false }
+  local function makeChime()
+    local rate, out = 48000, {}
+    local notes = { { f = 1318.5, at = 0, len = 0.9 }, { f = 1046.5, at = 0.42, len = 1.3 } }
+    local total = math.floor(rate * 1.75)
+    for i = 1, total do out[i] = 0 end
+    for _, nt in ipairs(notes) do
+      local s0 = math.floor(nt.at * rate)
+      local n = math.floor(nt.len * rate)
+      local w = 2 * math.pi * nt.f / rate
+      for k = 0, n - 1 do
+        local env = math.exp(-k / (rate * 0.28)) * math.min(1, k / 120)
+        local v = math.sin(w * k) + 0.35 * math.sin(2 * w * k) + 0.12 * math.sin(3.01 * w * k)
+        local i = s0 + k + 1
+        if i <= total then out[i] = out[i] + v * env * 44 end
+      end
+    end
+    for i = 1, total do out[i] = math.floor(out[i] + 0.5) end
+    return out
+  end
+  function WEL.chime() CH.pcm = CH.pcm or makeChime(); CH.pos, CH.on = 0, true; wake() end
+  -- add the chime on top of a chunk of music
+  function WEL.mix(pcm)
+    if not CH.on then return end
+    local c = CH.pcm
+    for i = 1, #pcm do
+      local v = c[CH.pos + i]
+      if not v then break end
+      local m = pcm[i] * 0.6 + v
+      pcm[i] = m > 127 and 127 or (m < -128 and -128 or math.floor(m))
+    end
+    CH.pos = CH.pos + #pcm
+    if CH.pos >= #c then CH.on = false end
+  end
+  function WEL.waiting() return CH.on end
+  -- nothing playing: play the chime by itself
+  function WEL.solo(play)
+    while CH.on do
+      local chunk = {}
+      for i = 1, 16384 do local v = CH.pcm[CH.pos + i]; if not v then break end; chunk[i] = v end
+      CH.pos = CH.pos + #chunk
+      if #chunk == 0 or CH.pos >= #CH.pcm then CH.on = false end
+      if #chunk > 0 then play(chunk, S.gen) end
+    end
+  end
+  -- big message across the screens for 5 seconds
+  function WEL.draw(t)
+    if t >= WEL.showUntil then
+      WEL.cur = table.remove(WEL.queue, 1)
+      if WEL.cur then WEL.showUntil = t + 5; WEL.chime() end
+    end
+    local c = WEL.cur
+    if not c or t >= WEL.showUntil then WEL.cur = nil; return end
+    local bw, bh = math.min(W - 6, 70), 11
+    local x1, y1 = math.floor((W - bw) / 2) + 1, math.floor((H - bh) / 2) + 1
+    local x2, y2 = x1 + bw - 1, y1 + bh - 1
+    local col = c.friend and LIME or YELLOW
+    fill(x1 - 1, y1 - 1, x2 + 1, y2 + 1, col)
+    fill(x1, y1, x2, y2, PANEL)
+    local head = c.friend and "W E L C O M E   B A C K" or "V I S I T O R"
+    local name = c.friend and WEL.FRIENDS[c.name] or c.name
+    local big = name:upper():gsub(".", "%0 "):sub(1, -2)
+    local cx = math.floor((x1 + x2) / 2)
+    text(cx - math.floor(#head / 2), y1 + 2, head, col, PANEL)
+    text(cx - math.floor(#big / 2), y1 + 5, big, WHITE, PANEL)
+    local mt = mountainTime()
+    local sub = c.friend and (mt.h12 .. ":" .. string.format("%02d", mt.min) .. " " .. mt.ampm .. "  -  good to see you!") or "someone is at the base"
+    text(cx - math.floor(#sub / 2), y1 + 8, sub, LGRAY, PANEL)
+    local left = math.max(0, math.min(1, (WEL.showUntil - t) / 5))
+    for x = x1, x1 + math.floor((bw - 1) * left) do setCell(x, y2, " ", WHITE, col) end
+  end
+
+  -- song of the day: the same pick everywhere, changes at midnight Mountain Time
+  SOTD = { day = nil, pick = nil }
+  function SOTD.get()
+    local mt = mountainTime()
+    local key = mt.month .. "/" .. mt.day .. "/" .. (os.epoch("utc") > 0 and math.floor(os.epoch("utc") / 31557600000) or 0)
+    if SOTD.day == key and SOTD.pick then return SOTD.pick end
+    local all, seen = {}, {}
+    for p, pl in ipairs(S.lists or {}) do
+      for si, sg in ipairs(pl.songs) do
+        if not seen[sg.file] then seen[sg.file] = true; all[#all + 1] = { pl = p, si = si, title = sg.title, artist = sg.artist } end
+      end
+    end
+    if #all == 0 then return nil end
+    local h = 5381
+    for i = 1, #key do h = (h * 33 + key:byte(i)) % 2147483647 end
+    SOTD.day, SOTD.pick = key, all[h % #all + 1]
+    return SOTD.pick
+  end
+end
+
 -- ---------------------------------------------------------- song search on the jukebox screen (tap keyboard)
-local queuePos, requestSong              -- (defined further down)
 local drawSearchLeft
 do
   local KEYS = { "1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM" }
@@ -1744,6 +1881,7 @@ local function draw(dt, t)
   screenButton()
   powerButton()
   if not ctl then drawWeatherStrip() end
+  WEL.draw(t)
   present()
 end
 
@@ -1820,9 +1958,12 @@ local function audioLoop()
       local chunk = S.data:sub(S.feedByte + 1, S.feedByte + CFG.chunk)
       local pcm = decoder(chunk)
       ringAdd(S.feedByte * 8, pcm)
+      WEL.mix(pcm)
       if playAll(pcm, g) and S.gen == g then S.feedByte = S.feedByte + #chunk end
     elseif S.data and not S.paused then
       if position() >= duration() - 0.05 then nextTrack() else waitWake(0.1) end
+    elseif WEL.waiting() then
+      WEL.solo(playAll)
     else
       waitWake(1)
     end
@@ -1940,6 +2081,7 @@ local function renderLoop()
       frames = frames + 1
       if frames % 5 == 0 or S.netDirty then S.netDirty = false; sendState() end
       if frames % 30 == 0 then pollWorld() end
+      if frames % 20 == 10 then WEL.poll() end
       if frames % 30 == 15 and netOn then pcall(rednet.broadcast, panelData(), PROTO) end
       timer = os.startTimer(CFG.frame)
     end

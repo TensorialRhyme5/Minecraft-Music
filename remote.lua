@@ -1193,6 +1193,10 @@ local function drawControl(t)
     else text(x1 + 11, y, "loading...", GRAY, PANEL) end
     y = y + 1
   end
+  if p.sotd then
+    text(x1 + 1, y, "\14", YELLOW, PANEL)
+    text(x1 + 3, y, fitT(p.sotd.title .. (p.sotd.artist ~= "" and (" - " .. p.sotd.artist) or ""), w - 4), YELLOW, PANEL)
+  end
   y = y + 1
   local g = p.game or {}
   text(x1 + 1, y, "MC", GRASS, PANEL)
