@@ -503,6 +503,116 @@ local function wxLook(code, day)
 end
 local DEG = "\176"
 
+-- ---------------------------------------------------------- pairing: only paired remotes / zones / pockets may control the music
+local hit, button                     -- (defined further down; declared here so the pairing page can use them)
+local SEC
+do
+local band, bor, bxor, bnot, rrot, rshift = bit32.band, bit32.bor, bit32.bxor, bit32.bnot, bit32.rrotate, bit32.rshift
+local SHA_K = {
+  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+  0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+  0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+  0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+  0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+  0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+  0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+  0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+}
+local function sha256(msg)
+  msg = tostring(msg)
+  local len = #msg
+  msg = msg .. "\128" .. string.rep("\0", (55 - len) % 64)
+  local bits = len * 8
+  local hi = math.floor(bits / 4294967296)
+  msg = msg .. string.char(
+    band(rshift(hi, 24), 255), band(rshift(hi, 16), 255), band(rshift(hi, 8), 255), band(hi, 255),
+    band(rshift(bits, 24), 255), band(rshift(bits, 16), 255), band(rshift(bits, 8), 255), band(bits, 255))
+  local h0, h1, h2, h3, h4, h5, h6, h7 =
+    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
+  local w = {}
+  for chunk = 1, #msg, 64 do
+    for i = 0, 15 do
+      local a, b, c, d = msg:byte(chunk + i * 4, chunk + i * 4 + 3)
+      w[i] = bor(a * 16777216, b * 65536, c * 256, d)
+    end
+    for i = 16, 63 do
+      local s0 = bxor(rrot(w[i - 15], 7), rrot(w[i - 15], 18), rshift(w[i - 15], 3))
+      local s1 = bxor(rrot(w[i - 2], 17), rrot(w[i - 2], 19), rshift(w[i - 2], 10))
+      w[i] = band(w[i - 16] + s0 + w[i - 7] + s1, 0xffffffff)
+    end
+    local a, b, c, d, e, f, g, h = h0, h1, h2, h3, h4, h5, h6, h7
+    for i = 0, 63 do
+      local S1 = bxor(rrot(e, 6), rrot(e, 11), rrot(e, 25))
+      local ch = bxor(band(e, f), band(bnot(e), g))
+      local t1 = band(h + S1 + ch + SHA_K[i + 1] + w[i], 0xffffffff)
+      local S0 = bxor(rrot(a, 2), rrot(a, 13), rrot(a, 22))
+      local maj = bxor(band(a, b), band(a, c), band(b, c))
+      local t2 = band(S0 + maj, 0xffffffff)
+      h, g, f, e, d, c, b, a = g, f, e, band(d + t1, 0xffffffff), c, b, a, band(t1 + t2, 0xffffffff)
+    end
+    h0, h1, h2, h3 = band(h0 + a, 0xffffffff), band(h1 + b, 0xffffffff), band(h2 + c, 0xffffffff), band(h3 + d, 0xffffffff)
+    h4, h5, h6, h7 = band(h4 + e, 0xffffffff), band(h5 + f, 0xffffffff), band(h6 + g, 0xffffffff), band(h7 + h, 0xffffffff)
+  end
+  return string.format("%08x%08x%08x%08x%08x%08x%08x%08x", h0, h1, h2, h3, h4, h5, h6, h7)
+end
+
+  local FILE, ABC = "jukebox_pairing.txt", "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+  SEC = { devices = {}, code = nil, until_ = 0, sha256 = sha256 }
+  if fs.exists(FILE) then
+    local f = fs.open(FILE, "r"); local ok, d = pcall(textutils.unserialize, f.readAll()); f.close()
+    if ok and type(d) == "table" and type(d.devices) == "table" then SEC.devices = d.devices end
+  end
+  function SEC.save() local f = fs.open(FILE, "w"); f.write(textutils.serialize({ devices = SEC.devices })); f.close() end
+  function SEC.newCode()
+    local c = ""
+    for _ = 1, 8 do local i = math.random(1, #ABC); c = c .. ABC:sub(i, i) end
+    SEC.code, SEC.until_ = c, now() + 120
+  end
+  -- what gets signed (must match the remotes exactly)
+  local function canon(m)
+    local o = type(m.order) == "table" and table.concat(m.order, ",") or ""
+    return table.concat({ tostring(m.cmd), tostring(m.pl or ""), tostring(m.si or ""), tostring(m.idx or ""), tostring(m.sec or ""),
+      tostring(m.by or ""), tostring(m.vol or ""), o }, "|")
+  end
+  local function reply(to, m) if to then pcall(rednet.send, to, m, "spacejukebox") end end
+  -- true = go ahead and run this command
+  function SEC.gate(msg, from)
+    local c = msg.cmd
+    if c == "hello" then return true end                    -- just asks for the current state
+    local dev = tonumber(msg.dev)
+    if c == "pair" then
+      local ok = SEC.code and now() < SEC.until_ and dev and msg.nonce
+        and msg.proof == sha256(SEC.code .. "|jpair|" .. dev .. "|" .. tostring(msg.nonce))
+      if ok then
+        SEC.devices[dev] = { key = sha256(SEC.code .. "|jkey|" .. dev), ctr = 0,
+          kind = tostring(msg.kind or "device"), label = type(msg.label) == "string" and msg.label or nil }
+        SEC.code = nil
+        SEC.save()
+      end
+      reply(from, { type = "jpaired", ok = ok and true or false, dev = dev,
+        why = (not ok) and (SEC.code and now() < SEC.until_ and "wrong code" or "no code showing on the jukebox") or nil })
+      return false
+    end
+    local r = dev and SEC.devices[dev]
+    local why
+    if not r then why = "not paired"
+    elseif not tonumber(msg.ctr) or tonumber(msg.ctr) <= (r.ctr or 0) then why = "old or replayed command"
+    elseif msg.mac ~= sha256(r.key .. "|" .. tostring(msg.ctr) .. "|" .. canon(msg)) then why = "bad signature" end
+    if why then reply(from, { type = "jdenied", why = why, dev = dev }); return false end
+    r.ctr = tonumber(msg.ctr)
+    r.seen = now()
+    if now() - (SEC.savedAt or 0) > 30 then SEC.savedAt = now(); SEC.save() end
+    if type(msg.label) == "string" then r.label = msg.label end
+    return true
+  end
+  function SEC.list()
+    local ids = {}
+    for id in pairs(SEC.devices) do ids[#ids + 1] = id end
+    table.sort(ids)
+    return ids
+  end
+end
+
 local P, pollWorld, tpsLoop, panelData, drawControl, screenButton
 do
 P = { storage = nil, storageAt = -1e9, seen = {}, players = nil, near = {}, hasDet = false, hasEnv = false, tps = nil }
@@ -577,7 +687,44 @@ local function card(x1, y1, x2, y2, title, col)
   fill(x1, y1, x2, y2, PANEL)
   text(x1 + 1, y1, title, col, PANEL)
 end
+local function drawPairPage()
+  local x1, x2 = L.rx1 + 1, W - 1
+  local top, bottom = 5, L.py - 2
+  card(x1, top, x2, bottom, "PAIRED DEVICES", YELLOW)
+  text(x1 + 18, top, "only these can control the music", GRAY, PANEL)
+  local ids = SEC.list()
+  local y = top + 2
+  if #ids == 0 then text(x1 + 2, y, "nothing paired yet", LGRAY, PANEL); y = y + 1 end
+  for _, id in ipairs(ids) do
+    if y > bottom - 9 then break end
+    local d = SEC.devices[id]
+    local kind = ({ remote = "Remote screen", zone = "Listening zone", pocket = "Pocket" })[d.kind] or d.kind
+    text(x1 + 2, y, fitT(kind, 16), LBLUE, PANEL)
+    text(x1 + 19, y, "#" .. id, GRAY, PANEL)
+    if d.label then text(x1 + 26, y, fitT(d.label, 24), WHITE, PANEL) end
+    button("jrm" .. id, x2 - 10, y, x2 - 2, y, "REMOVE", WHITE, RED, function()
+      SEC.devices[id] = nil; SEC.save()
+    end)
+    y = y + 2
+  end
+  local cy = bottom - 7
+  if SEC.code and now() < SEC.until_ then
+    fill(x1 + 2, cy, x2 - 2, cy + 4, HILITE)
+    text(x1 + 4, cy, "Type this on the device you're pairing:", LGRAY, HILITE)
+    local shown = (SEC.code:sub(1, 4) .. "-" .. SEC.code:sub(5)):gsub(".", "%0 ")
+    text(L.cx - math.floor(#shown / 2), cy + 2, shown, YELLOW, HILITE)
+    text(x1 + 4, cy + 4, math.ceil(SEC.until_ - now()) .. "s left", LGRAY, HILITE)
+  else
+    SEC.code = nil
+    text(x1 + 2, cy, "Remote / zone: type the code on that computer's keyboard", LGRAY, PANEL)
+    text(x1 + 2, cy + 1, "Pocket: open the MUSIC tab and type it there", LGRAY, PANEL)
+    button("jnew", x1 + 2, cy + 3, x1 + 24, cy + 5, "NEW PAIRING CODE", BLACK, LIME, function() SEC.newCode() end)
+  end
+  button("jback", x2 - 12, bottom - 2, x2 - 2, bottom - 1, G_LEFT .. " BACK", BLACK, YELLOW, function() UI.ctlPage = nil; SEC.code = nil end)
+end
+
 drawControl = function(t)
+  if UI.ctlPage == "pair" then drawPairPage(); return end
   local x1, x2 = L.rx1 + 1, W - 1
   local top, bottom = 5, L.py - 2
   local gap = 2
@@ -646,7 +793,9 @@ drawControl = function(t)
   text(mx1 + 2, y, "Weather ", LGRAY, PANEL); text(mx1 + 10, y, fitT(wxs, mx2 - mx1 - 11), wcol, PANEL); y = y + 1
   local ts, tcol = tpsLook(P.tps)
   text(mx1 + 2, y, "TPS     ", LGRAY, PANEL); text(mx1 + 10, y, ts, tcol, PANEL); y = y + 2
-  text(mx1 + 1, y, "DEVICES", YELLOW, PANEL); y = y + 1
+  text(mx1 + 1, y, "DEVICES", YELLOW, PANEL)
+  button("jpair", mx2 - 10, y, mx2 - 1, y, "PAIRING", BLACK, YELLOW, function() UI.ctlPage = "pair" end)
+  y = y + 1
   local devs = { { "Jukebox", true }, { "Storage", storageOK() }, { "Crafter", storageOK() and P.storage.crafter == true },
                  { "Listening zone", online("zone") }, { "Remote screen", online("remote") } }
   local dw = math.floor((mx2 - mx1 - 2) / 2)
@@ -665,26 +814,152 @@ drawControl = function(t)
   if not st then
     text(x1 + 2, sy1 + 2, "waiting for the storage computer...", GRAY, PANEL)
   else
+    -- 24-hour graph on the right: one column per hour, scaled to its own low/high
+    local g = type(st.graph) == "table" and st.graph or {}
+    local gw = 24
+    local gx1 = x2 - gw - 1
+    local ix2 = gx1 - 3                                  -- right edge of the text side
+    text(gx1, sy1, "LAST 24 HOURS", LGRAY, PANEL)
+    if #g >= 2 then
+      local lo, hi = math.huge, -math.huge
+      for _, v in ipairs(g) do lo = math.min(lo, v); hi = math.max(hi, v) end
+      local span = math.max(1, hi - lo)
+      local gh = bottom - sy1 - 1                        -- rows for the bars
+      local units = gh * 3
+      local off = gw - #g
+      for i, v in ipairs(g) do
+        local u = 1 + math.floor((v - lo) / span * (units - 1) + 0.5)
+        local x = gx1 + off + i - 1
+        for r = 1, gh do
+          local left = u - (r - 1) * 3
+          local y = bottom - r
+          if left >= 3 then setCell(x, y, " ", WHITE, LBLUE)
+          elseif left == 2 then setCell(x, y, G_TOP1, PANEL, LBLUE)     -- bottom two-thirds blue
+          elseif left == 1 then setCell(x, y, G_TOP2, PANEL, LBLUE) end -- bottom third blue
+        end
+      end
+      local diff = g[#g] - g[1]
+      local ds = (diff >= 0 and "+" or "-") .. commasN(math.abs(diff))
+      text(x2 - #ds, sy1, ds, diff >= 0 and LIME or RED, PANEL)
+    else
+      text(gx1, sy1 + 2, "building history...", GRAY, PANEL)
+      text(gx1, sy1 + 3, "(a point every 10 min)", GRAY, PANEL)
+    end
+    -- today's total next to the title
+    local td = "Today +" .. commasN(st.today or 0) .. " in"
+    text(x1 + 10, sy1, td, LIME, PANEL)
+    if (st.yesterday or 0) > 0 then text(x1 + 11 + #td, sy1, "(yesterday " .. commasN(st.yesterday) .. ")", GRAY, PANEL) end
     local pct = (st.slots or 0) > 0 and st.used / st.slots or 0
-    local bw = x2 - x1 - 24
+    local pctS = math.floor(pct * 100 + 0.5) .. "% full"
+    local bw = ix2 - x1 - 3 - #pctS
     local f = math.floor(pct * bw + 0.5)
     for i = 1, bw do setCell(x1 + 1 + i, sy1 + 1, " ", WHITE, i <= f and (pct > 0.9 and RED or (pct > 0.75 and YELLOW or LIME)) or GRAY) end
-    text(x1 + bw + 4, sy1 + 1, math.floor(pct * 100 + 0.5) .. "% full", WHITE, PANEL)
-    text(x1 + 2, sy1 + 2, commasN(st.total) .. " items   " .. commasN(st.types) .. " kinds   " .. commasN(st.used) .. "/" .. commasN(st.slots) .. " slots", LGRAY, PANEL)
-    text(x1 + 2, sy1 + 3, fitT(st.busy or st.msg or "", x2 - x1 - 3), st.busy and YELLOW or WHITE, PANEL)
+    text(ix2 - #pctS + 1, sy1 + 1, pctS, WHITE, PANEL)
+    text(x1 + 2, sy1 + 2, fitT(commasN(st.total) .. " items   " .. commasN(st.types) .. " kinds   " .. commasN(st.used) .. "/" .. commasN(st.slots) .. " slots", ix2 - x1 - 1), LGRAY, PANEL)
+    text(x1 + 2, sy1 + 3, fitT(st.busy or st.msg or "", ix2 - x1 - 1), st.busy and YELLOW or WHITE, PANEL)
     local low = type(st.low) == "table" and st.low or {}
     if #low == 0 then text(x1 + 2, sy1 + 4, "Low stock: none", GRAY, PANEL)
     else
       local parts = {}
       for _, a in ipairs(low) do parts[#parts + 1] = a.name .. " " .. commasN(a.have) .. "/" .. commasN(a.limit) end
       text(x1 + 2, sy1 + 4, "Low stock:", RED, PANEL)
-      text(x1 + 13, sy1 + 4, fitT(table.concat(parts, "   "), x2 - x1 - 14), WHITE, PANEL)
+      text(x1 + 13, sy1 + 4, fitT(table.concat(parts, "   "), ix2 - x1 - 12), WHITE, PANEL)
     end
   end
   -- what's playing, just above the progress bar
   local np = S.song and (G_RIGHT .. " " .. S.song.title .. "  -  " .. S.song.artist) or "Nothing playing"
   text(L.cx - math.floor(math.min(#np, L.rw - 4) / 2), L.py - 1, fitT(np, L.rw - 4), S.song and WHITE or GRAY)
 end
+end
+
+-- ---------------------------------------------------------- song search on the jukebox screen (tap keyboard)
+local queuePos, requestSong              -- (defined further down)
+local drawSearchLeft
+do
+  local KEYS = { "1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM" }
+  local function matches(q)
+    local out, seen, words = {}, {}, {}
+    for w in q:lower():gmatch("%S+") do words[#words + 1] = w end
+    if #words == 0 then return out end
+    for p, pl in ipairs(S.lists or {}) do
+      for si, sg in ipairs(pl.songs) do
+        local key = sg.file or (sg.title .. sg.artist)
+        if not seen[key] then
+          local hay = (tostring(sg.title) .. " " .. tostring(sg.artist)):lower()
+          local ok = true
+          for _, w in ipairs(words) do if not hay:find(w, 1, true) then ok = false; break end end
+          if ok then seen[key] = true; out[#out + 1] = { pl = p, si = si, song = sg } end
+        end
+      end
+    end
+    return out
+  end
+  drawSearchLeft = function()
+    local lw = L.lw
+    fill(1, 1, lw, L.hy2, PANEL)
+    button("sback", 1, 1, 9, L.hy2, G_LEFT .. " BACK", YELLOW, GRAY, function() UI.view = "playlists" end)
+    text(math.floor((lw - 6) / 2) + 3, 2, "SEARCH", YELLOW, PANEL)
+    for x = 1, lw do setCell(x, 4, G_HLINE, YELLOW, BLACK) end
+    local q = UI.sq or ""
+    fill(1, 5, lw, 5, HILITE)
+    text(2, 5, "> " .. q:sub(-(lw - 5)) .. "_", WHITE, HILITE)
+    -- keyboard along the bottom: keys are 3 wide and 2 tall
+    local kw = lw >= 31 and 3 or 2                     -- key width (narrow panels get smaller keys)
+    local kbTop = H - 9
+    local kx = math.floor((lw - kw * 10) / 2) + 1
+    for r, row in ipairs(KEYS) do
+      local y = kbTop + (r - 1) * 2
+      local x0 = kx + math.floor((10 - #row) * kw / 2)
+      for i = 1, #row do
+        local ch = row:sub(i, i)
+        local x = x0 + (i - 1) * kw
+        button("k" .. ch, x, y, x + kw - 1, y + 1, ch, WHITE, (r + i) % 2 == 0 and GRAY or PANEL, function() UI.sq = (UI.sq or "") .. ch:lower(); UI.sScroll = 0 end)
+      end
+    end
+    local y = kbTop + 8
+    local kbw = kw * 10                                -- whole keyboard width
+    local sp, dl = math.floor(kbw / 2), math.floor(kbw * 0.8)
+    button("kspace", kx, y, kx + sp - 1, y + 1, "SPACE", WHITE, GRAY, function() UI.sq = (UI.sq or "") .. " " end)
+    button("kdel", kx + sp, y, kx + dl - 1, y + 1, "DEL", BLACK, YELLOW, function() UI.sq = (UI.sq or ""):sub(1, -2); UI.sScroll = 0 end)
+    button("kclr", kx + dl, y, kx + kbw - 1, y + 1, "CLR", WHITE, RED, function() UI.sq = ""; UI.sScroll = 0 end)
+    -- results
+    local res = matches(q)
+    local ry1, ry2 = 7, kbTop - 3
+    local rows = ry2 - ry1 + 1
+    UI.sScroll = clamp(UI.sScroll or 0, 0, math.max(0, #res - rows))
+    if q == "" then text(2, ry1, "tap letters to search all songs", GRAY)
+    elseif #res == 0 then text(2, ry1, "no songs match", GRAY) end
+    for r = 1, rows do
+      local e = res[UI.sScroll + r]
+      if not e then break end
+      local yy = ry1 + r - 1
+      local cur = S.curPl == e.pl and S.curSi == e.si
+      local qp = queuePos(e.pl, e.si)
+      local bg = cur and HILITE or nil
+      if cur then fill(1, yy, lw, yy, HILITE) end
+      text(1, yy, cur and G_RIGHT or (qp and ("Q" .. qp) or " "), cur and YELLOW or LBLUE, bg)
+      local x = qp and 4 or 3
+      local room = lw - x
+      local t1 = e.song.title
+      if #t1 > room then t1 = t1:sub(1, room - 2) .. ".." end
+      text(x, yy, t1, WHITE, bg)
+      local rest = room - #t1
+      if rest > 4 and (e.song.artist or "") ~= "" then
+        local a = " - " .. e.song.artist
+        if #a > rest then a = a:sub(1, rest - 2) .. ".." end
+        text(x + #t1, yy, a, LGRAY, bg)
+      end
+      hit("sres:" .. r, 1, yy, lw, yy, function()
+        local i = queuePos(e.pl, e.si)
+        if i then table.remove(S.upNext, i) else requestSong({ pl = e.pl, si = e.si }) end
+      end)
+    end
+    -- scroll + count
+    local info = #res > 0 and ((UI.sScroll + 1) .. "-" .. math.min(#res, UI.sScroll + rows) .. " of " .. #res) or ""
+    text(math.floor((lw - #info) / 2) + 1, ry2 + 1, info, GRAY)
+    button("sup", 1, ry2 + 1, 5, ry2 + 1, G_UP, YELLOW, GRAY, function() UI.sScroll = UI.sScroll - (rows - 2) end, UI.sScroll > 0)
+    button("sdn", lw - 4, ry2 + 1, lw, ry2 + 1, G_DOWN, YELLOW, GRAY, function() UI.sScroll = UI.sScroll + (rows - 2) end, UI.sScroll + rows < #res)
+  end
 end
 
 local function termStatus()
@@ -739,7 +1014,7 @@ local function playIndex(i)
   if UI.view == "songs" and UI.viewOrder == S.queue then ensureVisible(i) end
 end
 
-local function queuePos(pl, si)
+queuePos = function(pl, si)
   for i, e in ipairs(S.upNext) do if e.pl == pl and e.si == si then return i end end
 end
 
@@ -779,6 +1054,20 @@ end
 local function startPlaylist(p, order, index)
   S.pl, S.queue = p, order
   playIndex(index or 1)
+end
+-- a song asked for from a pocket: queue it next (or just play it if nothing is on)
+requestSong = function(msg)
+  local p, si = tonumber(msg.pl), tonumber(msg.si)
+  local pl = p and S.lists[p]
+  if not (pl and si and pl.songs[si]) then return end
+  if S.song then
+    if not queuePos(p, si) then S.upNext[#S.upNext + 1] = { pl = p, si = si }; wake() end
+  else
+    local order = shuffled(#pl.songs)
+    local at = 1
+    for k, v in ipairs(order) do if v == si then at = k end end
+    startPlaylist(p, order, at)
+  end
 end
 
 local function openPlaylist(p)
@@ -848,7 +1137,7 @@ local function loadPlaylists()
 end
 
 -- ---------------------------------------------------------- drawing
-local function hit(id, x1, y1, x2, y2, fn)
+hit = function(id, x1, y1, x2, y2, fn)
   hits[#hits + 1] = { id = id, x1 = x1, y1 = y1, x2 = x2, y2 = y2, fn = fn }
 end
 
@@ -864,7 +1153,7 @@ local function marquee(s, width, t)
   return (loop .. loop):sub(off + 1, off + width)
 end
 
-local function button(id, x1, y1, x2, y2, label, fg, bg, fn, enabled)
+button = function(id, x1, y1, x2, y2, label, fg, bg, fn, enabled)
   if enabled == false then fg, bg = GRAY, PANEL end
   if flashing(id) then fg, bg = BLACK, WHITE end
   fill(x1, y1, x2, y2, bg)
@@ -874,12 +1163,16 @@ local function button(id, x1, y1, x2, y2, label, fg, bg, fn, enabled)
 end
 
 local function drawLeft()
+  if UI.view == "search" then drawSearchLeft(); return end
   local lw = L.lw
   -- header with back / forward
   fill(1, 1, lw, L.hy2, PANEL)
   local inSongs = UI.view == "songs"
-  button("back", 1, 1, 6, L.hy2, G_LEFT, YELLOW, inSongs and GRAY or PANEL,
-    function() UI.view = "playlists" end, inSongs)
+  if inSongs then
+    button("back", 1, 1, 6, L.hy2, G_LEFT, YELLOW, GRAY, function() UI.view = "playlists" end)
+  else
+    button("search", 1, 1, 8, L.hy2, "SEARCH", BLACK, LBLUE, function() UI.view = "search"; UI.sq = ""; UI.sScroll = 0 end)
+  end
   button("fwd", lw - 5, 1, lw, L.hy2, G_RIGHT, YELLOW, (not inSongs and UI.lastPl) and GRAY or PANEL,
     function() if UI.lastPl then openPlaylist(UI.lastPl) end end, (not inSongs) and UI.lastPl ~= nil)
   local title = inSongs and S.lists[UI.viewPl].name:upper() or "PLAYLISTS"
@@ -1582,9 +1875,10 @@ local function sameOrder(a, b)
   return true
 end
 
-local function handleRemote(msg)
+local function handleRemote(msg, from)
   if type(msg) ~= "table" then return end
   if type(msg.who) == "string" then P.seen[msg.who] = now() end
+  if not SEC.gate(msg, from) then return end
   local c = msg.cmd
   if c == "toggle" then togglePause()
   elseif c == "next" then nextTrack()
@@ -1592,6 +1886,7 @@ local function handleRemote(msg)
   elseif c == "seek" and tonumber(msg.sec) then seek(tonumber(msg.sec))
   elseif c == "skip" and tonumber(msg.by) then seek(position() + tonumber(msg.by))
   elseif c == "volume" and tonumber(msg.vol) then setVolume(tonumber(msg.vol))
+  elseif c == "request" then requestSong(msg)
   elseif c == "queue" and S.song then
     local p, si = tonumber(msg.pl), tonumber(msg.si)
     if p and si and S.lists[p] and S.lists[p].songs[si] then toggleQueue(p, si) end
@@ -1668,7 +1963,7 @@ local function inputLoop()
     local ev, a, b, c = os.pullEventRaw()
     if ev == "terminate" then return
     elseif ev == "monitor_touch" and monByName[a] then handleTouch(b, c); sendState()
-    elseif ev == "rednet_message" and c == PROTO then handleRemote(b)
+    elseif ev == "rednet_message" and c == PROTO then handleRemote(b, a)
     elseif ev == "rednet_message" and c == "storagestat" and type(b) == "table" and b.type == "status" then
       P.storage, P.storageAt = b, now()
     elseif (ev == "http_success" or ev == "http_failure") and wxResult(a, ev == "http_success" and b or nil, ev == "http_failure" and b or nil) then
@@ -1724,7 +2019,7 @@ else
   termStatus()
 end
 
-if _G.__JB_TEST then _G.__JB = { S = S, UI = UI, hits = function() return hits end, L = L, P = P, panelData = panelData } end
+if _G.__JB_TEST then _G.__JB = { S = S, UI = UI, hits = function() return hits end, L = L, P = P, panelData = panelData, SEC = SEC } end
 
 openNet()
 pollWorld()

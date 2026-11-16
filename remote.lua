@@ -169,9 +169,123 @@ end
 -- ---------------------------------------------------------- jukebox link
 local J = { st = nil, at = 0, id = nil }
 local function online() return J.st ~= nil and now() - J.at < 4 end
+-- ---------------------------------------------------------- pairing with the jukebox (commands are signed)
+local MSEC
+do
+local band, bor, bxor, bnot, rrot, rshift = bit32.band, bit32.bor, bit32.bxor, bit32.bnot, bit32.rrotate, bit32.rshift
+local SHA_K = {
+  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+  0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+  0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+  0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+  0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+  0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+  0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+  0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+}
+local function sha256(msg)
+  msg = tostring(msg)
+  local len = #msg
+  msg = msg .. "\128" .. string.rep("\0", (55 - len) % 64)
+  local bits = len * 8
+  local hi = math.floor(bits / 4294967296)
+  msg = msg .. string.char(
+    band(rshift(hi, 24), 255), band(rshift(hi, 16), 255), band(rshift(hi, 8), 255), band(hi, 255),
+    band(rshift(bits, 24), 255), band(rshift(bits, 16), 255), band(rshift(bits, 8), 255), band(bits, 255))
+  local h0, h1, h2, h3, h4, h5, h6, h7 =
+    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
+  local w = {}
+  for chunk = 1, #msg, 64 do
+    for i = 0, 15 do
+      local a, b, c, d = msg:byte(chunk + i * 4, chunk + i * 4 + 3)
+      w[i] = bor(a * 16777216, b * 65536, c * 256, d)
+    end
+    for i = 16, 63 do
+      local s0 = bxor(rrot(w[i - 15], 7), rrot(w[i - 15], 18), rshift(w[i - 15], 3))
+      local s1 = bxor(rrot(w[i - 2], 17), rrot(w[i - 2], 19), rshift(w[i - 2], 10))
+      w[i] = band(w[i - 16] + s0 + w[i - 7] + s1, 0xffffffff)
+    end
+    local a, b, c, d, e, f, g, h = h0, h1, h2, h3, h4, h5, h6, h7
+    for i = 0, 63 do
+      local S1 = bxor(rrot(e, 6), rrot(e, 11), rrot(e, 25))
+      local ch = bxor(band(e, f), band(bnot(e), g))
+      local t1 = band(h + S1 + ch + SHA_K[i + 1] + w[i], 0xffffffff)
+      local S0 = bxor(rrot(a, 2), rrot(a, 13), rrot(a, 22))
+      local maj = bxor(band(a, b), band(a, c), band(b, c))
+      local t2 = band(S0 + maj, 0xffffffff)
+      h, g, f, e, d, c, b, a = g, f, e, band(d + t1, 0xffffffff), c, b, a, band(t1 + t2, 0xffffffff)
+    end
+    h0, h1, h2, h3 = band(h0 + a, 0xffffffff), band(h1 + b, 0xffffffff), band(h2 + c, 0xffffffff), band(h3 + d, 0xffffffff)
+    h4, h5, h6, h7 = band(h4 + e, 0xffffffff), band(h5 + f, 0xffffffff), band(h6 + g, 0xffffffff), band(h7 + h, 0xffffffff)
+  end
+  return string.format("%08x%08x%08x%08x%08x%08x%08x%08x", h0, h1, h2, h3, h4, h5, h6, h7)
+end
+
+  local FILE, ABC = "jukebox_pairing.txt", "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+  MSEC = { key = nil, code = "", note = nil, lastCtr = 0, pending = nil }
+  if fs.exists(FILE) then
+    local f = fs.open(FILE, "r"); local ok, d = pcall(textutils.unserialize, f.readAll()); f.close()
+    if ok and type(d) == "table" and type(d.key) == "string" then MSEC.key = d.key end
+  end
+  local function canon(m)
+    local o = type(m.order) == "table" and table.concat(m.order, ",") or ""
+    return table.concat({ tostring(m.cmd), tostring(m.pl or ""), tostring(m.si or ""), tostring(m.idx or ""), tostring(m.sec or ""),
+      tostring(m.by or ""), tostring(m.vol or ""), o }, "|")
+  end
+  function MSEC.sign(m)
+    if not MSEC.key or m.cmd == "pair" then return m end
+    local c = os.epoch("utc"); if c <= MSEC.lastCtr then c = MSEC.lastCtr + 1 end; MSEC.lastCtr = c
+    m.dev, m.ctr = os.getComputerID(), c
+    m.mac = sha256(MSEC.key .. "|" .. c .. "|" .. canon(m))
+    return m
+  end
+  function MSEC.pairMsg(kind)
+    local dev, nonce = os.getComputerID(), tostring(math.random(1, 2 ^ 30)) .. tostring(os.epoch("utc"))
+    MSEC.pending, MSEC.note = MSEC.code, "Pairing..."
+    return { cmd = "pair", dev = dev, nonce = nonce, kind = kind, label = os.getComputerLabel(),
+      proof = sha256(MSEC.code .. "|jpair|" .. dev .. "|" .. nonce) }
+  end
+  -- true if the message was a pairing reply (meant for us or not)
+  function MSEC.onReply(m)
+    if m.type ~= "jpaired" and m.type ~= "jdenied" then return false end
+    if tonumber(m.dev) ~= os.getComputerID() then return true end
+    if m.type == "jpaired" then
+      if m.ok and MSEC.pending then
+        MSEC.key = sha256(MSEC.pending .. "|jkey|" .. os.getComputerID())
+        local f = fs.open(FILE, "w"); f.write(textutils.serialize({ key = MSEC.key })); f.close()
+        MSEC.code, MSEC.note = "", "Paired!"
+      else MSEC.note = "Pairing failed: " .. tostring(m.why or "?") end
+      MSEC.pending = nil
+    elseif m.why == "not paired" then
+      MSEC.key = nil; if fs.exists(FILE) then fs.delete(FILE) end
+      MSEC.note = "This device was removed - pair again"
+    else MSEC.note = "Jukebox refused: " .. tostring(m.why) end
+    return true
+  end
+  function MSEC.typeChar(ch)
+    ch = tostring(ch):upper()
+    if #MSEC.code < 8 and ABC:find(ch, 1, true) then MSEC.code = MSEC.code .. ch end
+  end
+  function MSEC.backspace() MSEC.code = MSEC.code:sub(1, -2) end
+  function MSEC.termLines()                                -- for the computer's own screen
+    if MSEC.key then return end
+    term.setTextColour(colors.red); print("")
+    print("NOT PAIRED with the jukebox.")
+    term.setTextColour(colors.white)
+    print("On the jukebox: CONTROL > PAIRING >")
+    print("NEW PAIRING CODE, then type it here")
+    print("and press Enter:")
+    term.setTextColour(colors.yellow)
+    local c = MSEC.code
+    print("  > " .. c:sub(1, 4) .. (#c > 4 and ("-" .. c:sub(5)) or "") .. "_")
+    if MSEC.note then term.setTextColour(MSEC.note:find("ail") and colors.red or colors.lightGray); print("  " .. MSEC.note) end
+  end
+end
+
 local function send(msg)
   if not netOn then return end
   msg.who = "remote"
+  MSEC.sign(msg)
   if J.id then pcall(rednet.send, J.id, msg, PROTO) else pcall(rednet.broadcast, msg, PROTO) end
 end
 local function jPos()
@@ -1127,6 +1241,7 @@ local function drawControl(t)
     for i = 1, bw do setCell(x1 + 8 + i, y, " ", WHITE, i <= f and (pct > 0.9 and RED or (pct > 0.75 and YELLOW or GRASS)) or GRAY) end
     text(x2 - #ps, y, ps, WHITE, PANEL); y = y + 1
     text(x1 + 1, y, fitT(commasN(st.total) .. " items  " .. commasN(st.types) .. " kinds", w - 2), LGRAY, PANEL); y = y + 1
+    if st.today then text(x1 + 1, y, fitT("Today +" .. commasN(st.today) .. " in" .. ((st.yesterday or 0) > 0 and ("  (yest. " .. commasN(st.yesterday) .. ")") or ""), w - 2), GRASS, PANEL); y = y + 1 end
     local low = type(st.low) == "table" and st.low or {}
     if #low > 0 then
       local parts = {}
@@ -1163,6 +1278,11 @@ local function draw(t)
     button("screen", L.rx2 - 8, L.my1, L.rx2 - 1, L.my1, "CONTROL", WHITE, MAGENTA, function() UI.screen = "control" end)
   end
   drawMusic(t)
+  if not MSEC.key then                                   -- not paired: say so where the song title goes
+    fill(L.rx1, L.npy, L.rx2, L.npy, RED)
+    local msg = "NOT PAIRED - type code on computer"
+    text(L.rx1 + math.max(0, math.floor((L.rw - #msg) / 2)), L.npy, msg:sub(1, L.rw), WHITE, RED)
+  end
   present()
 end
 
@@ -1189,7 +1309,9 @@ local function termStatus()
   term.setTextColour(colors.yellow); print("JUKEBOX REMOTE")
   term.setTextColour(colors.white)
   print(netOn and "Modem found - talking to the jukebox." or "No modem found! Attach one to this computer.")
-  term.setTextColour(colors.lightGray); print("Q = quit")
+  term.setTextColour(colors.lightGray); print(MSEC.key and "Q = quit   (paired with the jukebox)" or "Ctrl+T = quit")
+  MSEC.termLines()
+  if not MSEC.key then return end
   local mt = mountainTime()
   local h12 = mt.hour % 12; if h12 == 0 then h12 = 12 end
   print("")
@@ -1215,7 +1337,13 @@ if _G.__JB_TEST then _G.__JB = { UI = UI, J = J, hits = function() return hits e
 local timer = os.startTimer(0)
 while true do
   local ev, a, b, c = os.pullEventRaw()
-  if ev == "terminate" or (ev == "key" and a == keys.q) then break
+  if ev == "terminate" or (ev == "key" and a == keys.q and MSEC.key) then break
+  elseif ev == "char" and not MSEC.key then MSEC.typeChar(a); termStatus()
+  elseif ev == "key" and not MSEC.key and (a == keys.backspace or a == keys.enter) then
+    if a == keys.backspace then MSEC.backspace()
+    elseif #MSEC.code == 8 then send(MSEC.pairMsg("remote")) else MSEC.note = "The code has 8 letters/numbers" end
+    termStatus()
+  elseif ev == "rednet_message" and c == PROTO and type(b) == "table" and MSEC.onReply(b) then termStatus()
   elseif ev == "timer" and a == timer then
     wxFetch(now())
     draw(now())

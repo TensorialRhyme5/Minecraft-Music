@@ -30,3 +30,20 @@ It shows:
 Optional blocks on the jukebox computer's network (touching it, or on a wired modem):
 - **Player Detector**: needed for the players list
 - **Environment Detector**: needed for in-game rain/thunder
+
+## Pairing (who can control the music)
+
+Only paired devices can control the jukebox. Anyone can still *see* what's playing.
+
+1. On the big screen: **CONTROL > PAIRING > NEW PAIRING CODE**. A code shows for 2 minutes.
+2. Type it in:
+   - **Remote / listening zone:** open that computer (right-click it) and type the code, then press Enter.
+   - **Pocket:** open the MUSIC tab and type it there.
+3. The PAIRING page lists every paired device with a **REMOVE** button.
+
+## Search
+
+- **Big screen:** tap **SEARCH** at the top of the playlists side and type on the tap keyboard.
+- **Pocket:** MUSIC tab > **SEARCH**.
+
+Tapping a song plays it if nothing is on; otherwise it goes into the queue (tap again to take it out).
