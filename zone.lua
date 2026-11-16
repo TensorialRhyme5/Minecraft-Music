@@ -150,6 +150,7 @@ local J = { st = nil, at = 0, id = nil }
 local function online() return J.st ~= nil and now() - J.at < 4 end
 local function send(msg)
   if not netOn then return end
+  msg.who = "zone"
   if J.id then pcall(rednet.send, J.id, msg, PROTO) else pcall(rednet.broadcast, msg, PROTO) end
 end
 local function masterPos()
@@ -597,7 +598,10 @@ local function uiLoop()
       if not online() then
         if A.playing then stopPlaying() end
         if t - lastHello > 3 then lastHello = t; send({ cmd = "hello" }) end
-      else syncCheck() end
+      else
+        syncCheck()
+        if t - lastHello > 10 then lastHello = t; send({ cmd = "hello" }) end   -- lets the jukebox show this zone as online
+      end
       if t - lastStatus > 30 then lastStatus = t; termStatus() end
       draw(t)
       timer = os.startTimer(CFG.frame)

@@ -171,6 +171,7 @@ local J = { st = nil, at = 0, id = nil }
 local function online() return J.st ~= nil and now() - J.at < 4 end
 local function send(msg)
   if not netOn then return end
+  msg.who = "remote"
   if J.id then pcall(rednet.send, J.id, msg, PROTO) else pcall(rednet.broadcast, msg, PROTO) end
 end
 local function jPos()
@@ -181,7 +182,7 @@ local function jPos()
   return math.min(p, st.dur or 0), st.dur or 0
 end
 
-local UI = { view = "playlists", viewPl = nil, viewOrder = nil, lastPl = nil, scroll = 0, plScroll = 0, queueMode = false }
+local UI = { screen = "music", view = "playlists", viewPl = nil, viewOrder = nil, lastPl = nil, scroll = 0, plScroll = 0, queueMode = false }
 local hits, flash = {}, {}
 local function hit(id, x1, y1, x2, y2, fn) hits[#hits + 1] = { id = id, x1 = x1, y1 = y1, x2 = x2, y2 = y2, fn = fn } end
 local function flashing(id) return flash[id] and now() - flash[id] < 0.15 end
@@ -1050,15 +1051,117 @@ local function drawStars(t)
   end
 end
 
+-- ---------------------------------------------------------- CONTROL view (data comes from the jukebox)
+local function fitT(s, w) s = tostring(s or ""); if w < 1 then return "" end if #s > w then return s:sub(1, math.max(1, w - 1)) .. "." end return s end
+local function commasN(n) local s = tostring(math.floor(n or 0)); local r = s:reverse():gsub("(%d%d%d)", "%1,"):reverse(); return (r:gsub("^,", "")) end
+local function drawControl(t)
+  local x1, x2 = L.rx1, L.rx2
+  local w = x2 - x1 + 1
+  local p = (J.panel and now() - J.panelAt < 20) and J.panel or nil
+  fill(x1, 2, x2, L.my2, PANEL)
+  text(x1, 1, "CONTROL PANEL", YELLOW)
+  button("screen", x2 - 6, 1, x2, 1, "MUSIC", BLACK, GRASS, function() UI.screen = "music" end)
+  if not p then
+    text(x1 + 1, 4, fitT(online() and "waiting for status..." or "jukebox offline", w - 2), GRAY, PANEL)
+    return
+  end
+  local y = 3
+  text(x1 + 1, y, p.clock .. " " .. p.tz, WHITE, PANEL)
+  text(x2 - #p.date, y, p.date, LGRAY, PANEL); y = y + 1
+  for _, c in ipairs(p.wx or {}) do
+    text(x1 + 1, y, fitT(c.name, 10), LBLUE, PANEL)
+    if c.ok then
+      local label, icon, icol = wxLook(c.code, c.day)
+      text(x1 + 11, y, icon, icol, PANEL)
+      local s = math.floor(c.temp + 0.5) .. "\176 " .. label
+      text(x1 + 13, y, fitT(s, w - 22), WHITE, PANEL)
+      if c.hi and c.lo then local hl = math.floor(c.hi + 0.5) .. "/" .. math.floor(c.lo + 0.5); text(x2 - #hl, y, hl, GRAY, PANEL) end
+    else text(x1 + 11, y, "loading...", GRAY, PANEL) end
+    y = y + 1
+  end
+  y = y + 1
+  local g = p.game or {}
+  text(x1 + 1, y, "MC", GRASS, PANEL)
+  text(x1 + 4, y, "Day " .. tostring(g.day or "?") .. "  " .. tostring(g.time or ""), WHITE, PANEL)
+  local ws, wc = "", GRAY
+  if g.hasEnv then if g.thunder then ws, wc = "Storm", YELLOW elseif g.rain then ws, wc = "Rain", LBLUE else ws, wc = "Clear", WHITE end end
+  text(x2 - #ws, y, ws, wc, PANEL); y = y + 1
+  local tps = p.tps
+  text(x1 + 1, y, "TPS", GRASS, PANEL)
+  if tps then
+    local tc = tps >= 18 and GRASS or (tps >= 12 and YELLOW or RED)
+    text(x1 + 5, y, string.format("%.1f", tps) .. (tps >= 18 and "  smooth" or (tps >= 12 and "  a bit laggy" or "  very laggy")), tc, PANEL)
+  else text(x1 + 5, y, "checking...", GRAY, PANEL) end
+  y = y + 2
+  -- players
+  local list = p.players
+  text(x1 + 1, y, "ONLINE" .. (list and (" (" .. #list .. ")") or ""), LBLUE, PANEL)
+  if list then text(x2 - 10, y, G_DOT, GRASS, PANEL); text(x2 - 8, y, "near base", GRAY, PANEL) end
+  y = y + 1
+  local pRows = 3
+  if not p.hasDet then text(x1 + 1, y, "no Player Detector", GRAY, PANEL)
+  elseif #list == 0 then text(x1 + 1, y, "nobody online", GRAY, PANEL)
+  else
+    local cw = math.floor((w - 2) / 2)
+    local maxN = pRows * 2
+    for i = 1, math.min(#list, maxN) do
+      local e = list[i]
+      local xx = x1 + 1 + ((i - 1) % 2) * cw
+      local yy = y + math.floor((i - 1) / 2)
+      if i == maxN and #list > maxN then text(xx, yy, "+" .. (#list - maxN + 1) .. " more", GRAY, PANEL)
+      else
+        setCell(xx, yy, G_DOT, e.near and GRASS or LBLUE, PANEL)
+        text(xx + 2, yy, fitT(e.name, cw - 3), WHITE, PANEL)
+      end
+    end
+  end
+  y = y + pRows + 1
+  -- storage
+  local st = p.storage
+  text(x1 + 1, y, "STORAGE", MAGENTA, PANEL)
+  if st then
+    local pct = (st.slots or 0) > 0 and st.used / st.slots or 0
+    local ps = math.floor(pct * 100 + 0.5) .. "%"
+    local bw = w - 11 - #ps
+    local f = math.floor(pct * bw + 0.5)
+    for i = 1, bw do setCell(x1 + 8 + i, y, " ", WHITE, i <= f and (pct > 0.9 and RED or (pct > 0.75 and YELLOW or GRASS)) or GRAY) end
+    text(x2 - #ps, y, ps, WHITE, PANEL); y = y + 1
+    text(x1 + 1, y, fitT(commasN(st.total) .. " items  " .. commasN(st.types) .. " kinds", w - 2), LGRAY, PANEL); y = y + 1
+    local low = type(st.low) == "table" and st.low or {}
+    if #low > 0 then
+      local parts = {}
+      for _, a in ipairs(low) do parts[#parts + 1] = a.name .. " " .. a.have .. "/" .. a.limit end
+      text(x1 + 1, y, "Low:", RED, PANEL); text(x1 + 6, y, fitT(table.concat(parts, ", "), w - 7), WHITE, PANEL)
+    else text(x1 + 1, y, fitT(st.busy or st.msg or "", w - 2), st.busy and YELLOW or WHITE, PANEL) end
+  else
+    y = y + 1; text(x1 + 1, y, "storage offline", GRAY, PANEL); y = y + 1
+  end
+  -- devices
+  y = y + 2
+  if y <= L.my2 and type(p.dev) == "table" then
+    local xx = x1 + 1
+    for _, d in ipairs({ { "Storage", p.dev.storage }, { "Crafter", p.dev.crafter }, { "Zone", p.dev.zone } }) do
+      setCell(xx, y, G_DOT, d[2] and GRASS or RED, PANEL)
+      text(xx + 2, y, d[1], d[2] and WHITE or GRAY, PANEL)
+      xx = xx + #d[1] + 4
+    end
+  end
+end
+
 local function draw(t)
   fbClear()
   hits = {}
   drawStars(t)
   for y = 1, H do setCell(L.sep, y, G_VLINE, YELLOW, BLACK) end
   drawLeft()
-  draw3D(t)
-  drawClock()
-  drawMinecraft(t)
+  if UI.screen == "control" then
+    drawControl(t)
+  else
+    draw3D(t)
+    drawClock()
+    drawMinecraft(t)
+    button("screen", L.rx2 - 8, L.my1, L.rx2 - 1, L.my1, "CONTROL", WHITE, MAGENTA, function() UI.screen = "control" end)
+  end
   drawMusic(t)
   present()
 end
@@ -1117,10 +1220,13 @@ while true do
     wxFetch(now())
     draw(now())
     frames = frames + 1
+    if frames % 100 == 0 then send({ cmd = "hello" }) end   -- lets the jukebox show this remote as online
     if frames % 300 == 0 then termStatus() end
     timer = os.startTimer(CFG.frame)
   elseif ev == "rednet_message" and c == PROTO and type(b) == "table" and b.type == "beat" then
     onBeat(b, now())
+  elseif ev == "rednet_message" and c == PROTO and type(b) == "table" and b.type == "panel" then
+    J.panel, J.panelAt = b, now()
   elseif ev == "rednet_message" and c == PROTO and type(b) == "table" and b.type == "state" then
     J.st, J.at, J.id = b, now(), a
     -- playlist file changed on GitHub? reload so both sides agree
