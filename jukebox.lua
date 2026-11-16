@@ -20,6 +20,14 @@ local CFG = {
 
 local dfpwm = require("cc.audio.dfpwm")
 
+-- volume is saved so it survives reboots (the screens and remotes can change it)
+local VOL_SAVE = "jukebox_volume.txt"
+if fs.exists(VOL_SAVE) then
+  local f = fs.open(VOL_SAVE, "r"); local v = tonumber(f.readAll()); f.close()
+  if v then CFG.volume = math.max(0, math.min(3, v)) end
+end
+local function saveVolume() local f = fs.open(VOL_SAVE, "w"); f.write(tostring(CFG.volume)); f.close() end
+
 -- every connected monitor shows the same screen (mirrored) and accepts taps
 local mons, monByName = {}, {}
 local function findMonitors()
@@ -1116,6 +1124,32 @@ local function drawProgress()
   end)
 end
 
+local setVolume
+setVolume = function(v)
+  v = math.floor(clamp(v, 0, 3) * 20 + 0.5) / 20
+  if v == CFG.volume then return end
+  CFG.volume = v
+  saveVolume()
+  S.netDirty = true                     -- remotes / zones see it right away
+end
+
+-- volume bar on the row just above the play controls
+local function drawVolume()
+  local y = L.by1 - 1
+  local pct = math.floor(CFG.volume * 100 + 0.5) .. "%"
+  local bw = math.min(40, L.rw - 30)
+  local total = 4 + 3 + 1 + bw + 1 + 3 + 1 + 4
+  local x = L.cx - math.floor(total / 2)
+  text(x, y, "VOL", YELLOW)
+  button("vdown", x + 4, y, x + 6, y, "-", WHITE, GRAY, function() setVolume(CFG.volume - 0.1) end)
+  local bx1 = x + 8
+  local filled = math.floor(CFG.volume / 3 * bw + 0.5)
+  for i = 1, bw do setCell(bx1 + i - 1, y, " ", WHITE, i <= filled and LIME or PANEL) end
+  hit("vbar", bx1, y, bx1 + bw - 1, y, function(px) setVolume((px - bx1 + 1) / bw * 3) end)
+  button("vup", bx1 + bw + 1, y, bx1 + bw + 3, y, "+", WHITE, GRAY, function() setVolume(CFG.volume + 0.1) end)
+  text(bx1 + bw + 5, y, pct, LGRAY)
+end
+
 local function drawControls()
   local playing = S.data and not S.paused
   local btns = {
@@ -1206,6 +1240,7 @@ local function draw(dt, t)
   drawTitle(t)
   drawEQ()
   drawProgress()
+  drawVolume()
   drawControls()
   powerButton()
   drawWeatherStrip()
@@ -1329,7 +1364,7 @@ local function sendState()
     title = S.song and S.song.title, artist = S.song and S.song.artist,
     pos = position(), dur = duration(), paused = S.paused, loading = S.loading, err = S.err,
     -- for listening zones: which file is playing and the wall-clock time its 0:00 would have been
-    file = S.song and S.song.file, track = S.trackId, power = UI.power,
+    file = S.song and S.song.file, track = S.trackId, power = UI.power, volume = CFG.volume,
     anchor = (S.data and not S.paused) and (S.startTime - S.startByte / 6000) or nil, sent = now(),
   }, PROTO)
 end
@@ -1348,6 +1383,7 @@ local function handleRemote(msg)
   elseif c == "prev" then prevTrack()
   elseif c == "seek" and tonumber(msg.sec) then seek(tonumber(msg.sec))
   elseif c == "skip" and tonumber(msg.by) then seek(position() + tonumber(msg.by))
+  elseif c == "volume" and tonumber(msg.vol) then setVolume(tonumber(msg.vol))
   elseif c == "queue" and S.song then
     local p, si = tonumber(msg.pl), tonumber(msg.si)
     if p and si and S.lists[p] and S.lists[p].songs[si] then toggleQueue(p, si) end

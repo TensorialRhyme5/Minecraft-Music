@@ -133,7 +133,8 @@ local function computeLayout()
   L.by2 = H; L.by1 = H                                 -- green controls (1 row)
   L.pgy = H - 1                                        -- progress row
   L.npy = H - 2                                        -- now playing row
-  L.my1 = L.topH + 1; L.my2 = H - 3                    -- pink MC box
+  L.vy = H - 3                                         -- jukebox volume row
+  L.my1 = L.topH + 1; L.my2 = H - 4                    -- pink MC box
   L.sky1, L.sky2 = L.my1 + 1, L.my2 - 2                -- light blue scene
   L.mdy = L.my2 - 1                                    -- purple digital row
   L.hy2 = 3; L.ly1 = 5; L.fy1 = H - 2; L.ly2 = L.fy1 - 2
@@ -995,6 +996,18 @@ local function drawMusic(t)
   if st and st.title then
     hit("seek", bx1, L.pgy, bx2, L.pgy, function(x) send({ cmd = "seek", sec = (x - bx1) / math.max(1, bw - 1) * dur }) end)
   end
+  -- jukebox volume (changes the main jukebox's speakers)
+  local vol = st and tonumber(st.volume)
+  local pct = vol and (math.floor(vol * 100 + 0.5) .. "%") or "--"
+  text(x1, L.vy, "VOL", YELLOW)
+  local vbx1, vbx2 = x1 + 8, x2 - 10
+  local vbw = vbx2 - vbx1 + 1
+  button("vdown", x1 + 4, L.vy, x1 + 6, L.vy, "-", WHITE, GRAY, function() if vol then send({ cmd = "volume", vol = vol - 0.1 }) end end, vol ~= nil)
+  local vf = vol and math.floor(vol / 3 * vbw + 0.5) or 0
+  for i = 1, vbw do setCell(vbx1 + i - 1, L.vy, " ", WHITE, i <= vf and GRASS or PANEL) end
+  if vol then hit("vbar", vbx1, L.vy, vbx2, L.vy, function(px) send({ cmd = "volume", vol = (px - vbx1 + 1) / vbw * 3 }) end) end
+  button("vup", vbx2 + 2, L.vy, vbx2 + 4, L.vy, "+", WHITE, GRAY, function() if vol then send({ cmd = "volume", vol = vol + 0.1 }) end end, vol ~= nil)
+  text(x2 - #pct + 1, L.vy, pct, LGRAY)
   -- buttons
   local playing = st and st.title and not st.paused
   local enabled = st ~= nil and st.title ~= nil

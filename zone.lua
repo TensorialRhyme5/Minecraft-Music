@@ -321,7 +321,7 @@ local function marquee(s, w, t)
 end
 
 local bars, gain = {}, { peak = 0.05 }
-local UI = { page = "main", plScroll = 0 }
+local UI = { page = "main", plScroll = 0, songPl = nil, scroll = 0, qScroll = 0 }
 
 local function drawMain(t)
   local st = J.st or {}
@@ -418,7 +418,115 @@ local function drawMain(t)
   local pct = math.floor(settings.volume * 100 + 0.5) .. "%"
   button("vup", W - 8, 21, W - 6, 21, "+", WHITE, GRAY, function() settings.volume = clamp(settings.volume + 0.25, 0, 3); saveSettings() end)
   text(W - #pct + 1, 21, pct, LGRAY)
-  button("lists", 2, 23, W - 1, H, "PLAYLISTS", BLACK, PURPLE, function() UI.page = "lists"; UI.plScroll = 0 end)
+  local half = math.floor((W - 3) / 2)
+  button("lists", 2, 23, 1 + half, H, "PLAYLISTS", BLACK, PURPLE, function() UI.page = "lists"; UI.plScroll = 0 end)
+  local nq = st.upNext and #st.upNext or 0
+  button("upnext", 3 + half, 23, W - 1, H, "UP NEXT" .. (nq > 0 and (" (" .. nq .. ")") or ""), BLACK, LBLUE,
+    function() UI.page = "queue"; UI.qScroll = 0 end)
+end
+
+-- ---------------------------------------------------------- queue helpers
+local function queuePos(pl, si)
+  local st = J.st
+  for i, e in ipairs(st and st.upNext or {}) do if e.pl == pl and e.si == si then return i end end
+end
+-- tap a song: add it to / remove it from Up Next. If nothing is playing, start the list on it.
+local function tapSong(pl, si)
+  local st = J.st or {}
+  if st.title then
+    send({ cmd = "queue", pl = pl, si = si })
+  else
+    local order = shuffled(#lists[pl].songs)
+    for i, v in ipairs(order) do if v == si then order[i], order[1] = order[1], order[i]; break end end
+    send({ cmd = "play", pl = pl, order = order, idx = 1 })
+    UI.page = "main"
+  end
+end
+local function scrollButtons(idUp, idDown, get, set, maxScroll)
+  local third = math.floor((W - 4) / 3)
+  button(idUp, 2, H - 2, 1 + third, H, "\30 UP", WHITE, get() > 0 and GRAY or PANEL, function() set(math.max(0, get() - (H - 9))) end)
+  button("back", 3 + third, H - 2, 2 + 2 * third, H, G_LEFT .. " BACK", BLACK, YELLOW, function()
+    UI.page = UI.page == "songs" and "lists" or "main"
+  end)
+  button(idDown, 4 + 2 * third, H - 2, W - 1, H, "DOWN \31", WHITE, get() < maxScroll and GRAY or PANEL,
+    function() set(math.min(maxScroll, get() + (H - 9))) end)
+end
+
+-- songs of one playlist: tap = queue it
+local function drawSongs()
+  local p = UI.songPl
+  local pl = lists and lists[p]
+  if not pl then UI.page = "lists"; return end
+  local st = J.st or {}
+  fill(1, 1, W, 1, PANEL)
+  text(2, 1, fit(pl.name, W - 10), YELLOW, PANEL)
+  local n = #pl.songs .. ""
+  text(W - #n, 1, n, LGRAY, PANEL)
+  button("shuffle", 2, 3, W - 1, 3, "SHUFFLE-PLAY THIS LIST", BLACK, PURPLE, function()
+    send({ cmd = "play", pl = p, order = shuffled(#pl.songs), idx = 1 }); UI.page = "main"
+  end)
+  local y1, y2 = 5, H - 4
+  local rows = y2 - y1 + 1
+  local maxScroll = math.max(0, #pl.songs - rows)
+  UI.scroll = clamp(UI.scroll, 0, maxScroll)
+  for r = 1, rows do
+    local si = UI.scroll + r
+    local song = pl.songs[si]
+    if not song then break end
+    local y = y1 + r - 1
+    local q = queuePos(p, si)
+    local cur = st.curPl == p and st.curSi == si
+    local bg = cur and HILITE or ((r % 2 == 0) and BLACK or PANEL)
+    fill(2, y, W - 1, y, bg)
+    local tag = q and ("Q" .. q) or (cur and G_RIGHT or "")
+    text(2, y, tag, q and LBLUE or YELLOW, bg)
+    text(5, y, fit(song.title, W - 6), cur and YELLOW or WHITE, bg)
+    hit("song" .. si, 2, y, W - 1, y, function() tapSong(p, si) end)
+  end
+  center(H - 3, st.title and "tap a song to queue / unqueue it" or "tap a song to play it", GRAY)
+  scrollButtons("sup", "sdown", function() return UI.scroll end, function(v) UI.scroll = v end, maxScroll)
+end
+
+-- what's queued up next: tap one to take it off
+local function drawQueue()
+  local st = J.st or {}
+  fill(1, 1, W, 1, PANEL)
+  text(2, 1, "UP NEXT", YELLOW, PANEL)
+  local q = st.upNext or {}
+  local y1, y2 = 3, H - 4
+  local rows = y2 - y1 + 1
+  local maxScroll = math.max(0, #q - rows)
+  UI.qScroll = clamp(UI.qScroll, 0, maxScroll)
+  if #q == 0 then
+    center(5, "Nothing queued", LGRAY)
+    center(7, "PLAYLISTS > pick a list >", GRAY)
+    center(8, "tap songs to queue them", GRAY)
+    -- after the queue, the shuffle continues:
+    if lists and st.queue and st.pl and lists[st.pl] then
+      center(11, "then the shuffle continues:", GRAY)
+      for k = 1, 4 do
+        local idx = st.queue[(st.qi or 0) + k]
+        local s2 = idx and lists[st.pl].songs[idx]
+        if s2 then text(3, 12 + k, fit(s2.title, W - 4), LGRAY) end
+      end
+    end
+  else
+    for r = 1, rows do
+      local i = UI.qScroll + r
+      local e = q[i]
+      if not e then break end
+      local y = y1 + r - 1
+      local song = lists and lists[e.pl] and lists[e.pl].songs[e.si]
+      local bg = (r % 2 == 0) and BLACK or PANEL
+      fill(2, y, W - 1, y, bg)
+      text(2, y, tostring(i), LBLUE, bg)
+      text(5, y, fit(song and song.title or "?", W - 9), WHITE, bg)
+      text(W - 2, y, "x", RED, bg)
+      hit("q" .. i, 2, y, W - 1, y, function() send({ cmd = "queue", pl = e.pl, si = e.si }) end)
+    end
+    center(H - 3, "tap a song to remove it", GRAY)
+  end
+  scrollButtons("qup", "qdown", function() return UI.qScroll end, function(v) UI.qScroll = v end, maxScroll)
 end
 
 local function drawLists()
@@ -433,22 +541,24 @@ local function drawLists()
       if y + 2 > H - 4 then break end
       local cur = st.curPl == p
       button("pl" .. p, 2, y, W - 1, y + 2, "", WHITE, cur and HILITE or PANEL, function()
-        send({ cmd = "play", pl = p, order = shuffled(#pl.songs), idx = 1 })
-        UI.page = "main"
+        UI.songPl, UI.scroll, UI.page = p, 0, "songs"
       end)
       text(4, y + 1, fit(pl.name, W - 14), cur and YELLOW or WHITE, cur and HILITE or PANEL)
       local n = #pl.songs .. " songs"
       text(W - 1 - #n, y + 1, n, LGRAY, cur and HILITE or PANEL)
       y = y + 4
     end
-    center(H - 3, "tap one to shuffle-play it", GRAY)
+    center(H - 3, "tap one to see its songs", GRAY)
   end
   button("back", 2, H - 1, W - 1, H, G_LEFT .. " BACK", WHITE, GRAY, function() UI.page = "main" end)
 end
 
 local function draw(t)
   clear(); hits = {}
-  if UI.page == "lists" then drawLists() else drawMain(t) end
+  if UI.page == "lists" then drawLists()
+  elseif UI.page == "songs" then drawSongs()
+  elseif UI.page == "queue" then drawQueue()
+  else drawMain(t) end
   present()
 end
 
