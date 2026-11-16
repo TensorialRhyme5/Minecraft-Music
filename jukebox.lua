@@ -503,6 +503,190 @@ local function wxLook(code, day)
 end
 local DEG = "\176"
 
+local P, pollWorld, tpsLoop, panelData, drawControl, screenButton
+do
+P = { storage = nil, storageAt = -1e9, seen = {}, players = nil, near = {}, hasDet = false, hasEnv = false, tps = nil }
+local NEAR_RANGE = 64                       -- "near base" = within this many blocks of the Player Detector
+local function fitT(s, w) s = tostring(s or ""); if w < 1 then return "" end if #s > w then return s:sub(1, math.max(1, w - 1)) .. "." end return s end
+local function commasN(n) local s = tostring(math.floor(n or 0)); local r = s:reverse():gsub("(%d%d%d)", "%1,"):reverse(); return (r:gsub("^,", "")) end
+pollWorld = function()
+  local det = peripheral.find("player_detector") or peripheral.find("playerDetector")
+  P.hasDet = det ~= nil
+  if det then
+    local ok, list = pcall(det.getOnlinePlayers)
+    if ok and type(list) == "table" then
+      local names = {}
+      for _, n in pairs(list) do if type(n) == "string" then names[#names + 1] = n end end
+      table.sort(names, function(a, b) return a:lower() < b:lower() end)
+      P.players = names
+    end
+    local ok2, near = pcall(det.getPlayersInRange, NEAR_RANGE)
+    P.near = {}
+    if ok2 and type(near) == "table" then for _, n in pairs(near) do P.near[n] = true end end
+  else
+    P.players, P.near = nil, {}
+  end
+  local env = peripheral.find("environment_detector") or peripheral.find("environmentDetector")
+  P.hasEnv = env ~= nil
+  if env then
+    local ok, r = pcall(env.isRaining); P.rain = ok and r or nil
+    local ok2, th = pcall(env.isThunder); P.thunder = ok2 and th or nil
+  else P.rain, P.thunder = nil, nil end
+end
+-- server speed: a 5 second timer takes longer than 5 real seconds when the server lags
+tpsLoop = function()
+  while true do
+    local t0 = now()
+    sleep(5)
+    local dt = now() - t0
+    if dt > 0 then P.tps = math.min(20, 100 / dt) end
+  end
+end
+local function gameClock()
+  local tm = os.time()
+  local h = math.floor(tm); local m = math.floor((tm - h) * 60)
+  local h12 = h % 12; if h12 == 0 then h12 = 12 end
+  return string.format("%d:%02d %s", h12, m, h < 12 and "AM" or "PM"), os.day()
+end
+local function online(who) return now() - (P.seen[who] or -1e9) < 30 end
+local function storageOK() return P.storage ~= nil and now() - P.storageAt < 20 end
+-- everything the remote and pockets need to draw their CONTROL view
+panelData = function()
+  local mt = mountainTime()
+  local wx = {}
+  for i, c in ipairs(CITIES) do wx[i] = { name = c.short, ok = c.ok, temp = c.temp, code = c.code, day = c.day, hi = c.hi, lo = c.lo } end
+  local gt, gd = gameClock()
+  local players
+  if P.players then
+    players = {}
+    for i, n in ipairs(P.players) do players[i] = { name = n, near = P.near[n] == true } end
+  end
+  return { type = "panel", clock = mt.h12 .. ":" .. string.format("%02d", mt.min) .. " " .. mt.ampm, tz = mt.dst and "MDT" or "MST",
+    date = DAYS[mt.wday + 1]:sub(1, 3) .. ", " .. MONTHS[mt.month] .. " " .. mt.day, wx = wx,
+    players = players, hasDet = P.hasDet, game = { time = gt, day = gd, rain = P.rain, thunder = P.thunder, hasEnv = P.hasEnv },
+    tps = P.tps, storage = storageOK() and P.storage or nil,
+    dev = { storage = storageOK(), crafter = storageOK() and P.storage.crafter == true, zone = online("zone"), remote = online("remote") } }
+end
+local function tpsLook(tps)
+  if not tps then return "checking...", GRAY end
+  if tps >= 18 then return string.format("%.1f  smooth", tps), LIME end
+  if tps >= 12 then return string.format("%.1f  a bit laggy", tps), YELLOW end
+  return string.format("%.1f  very laggy", tps), RED
+end
+local function card(x1, y1, x2, y2, title, col)
+  fill(x1, y1, x2, y2, PANEL)
+  text(x1 + 1, y1, title, col, PANEL)
+end
+drawControl = function(t)
+  local x1, x2 = L.rx1 + 1, W - 1
+  local top, bottom = 5, L.py - 2
+  local gap = 2
+  -- row 1: real time + the two towns
+  local cw = math.floor((x2 - x1 + 1 - gap * 2) / 3)
+  local rowH = 6
+  local cx = x1
+  local mt = mountainTime()
+  card(cx, top, cx + cw - 1, top + rowH - 1, "MOUNTAIN TIME", YELLOW)
+  text(cx + 2, top + 2, mt.h12 .. ":" .. string.format("%02d", mt.min) .. ":" .. string.format("%02d", mt.sec) .. " " .. mt.ampm, WHITE, PANEL)
+  text(cx + 2, top + 3, mt.dst and "MDT (daylight time)" or "MST (standard time)", GRAY, PANEL)
+  text(cx + 2, top + 4, DAYS[mt.wday + 1] .. ", " .. MONTHS[mt.month] .. " " .. mt.day, LGRAY, PANEL)
+  for i, c in ipairs(CITIES) do
+    cx = x1 + i * (cw + gap)
+    card(cx, top, cx + cw - 1, top + rowH - 1, c.name, c.col)
+    if c.ok then
+      local label, icon, icol = wxLook(c.code, c.day)
+      text(cx + 2, top + 2, icon, icol, PANEL)
+      text(cx + 4, top + 2, math.floor(c.temp + 0.5) .. DEG .. "F", WHITE, PANEL)
+      text(cx + 4, top + 3, fitT(label, cw - 5), LGRAY, PANEL)
+      if c.hi and c.lo then text(cx + 2, top + 4, "High " .. math.floor(c.hi + 0.5) .. DEG .. "  Low " .. math.floor(c.lo + 0.5) .. DEG, GRAY, PANEL) end
+    else
+      text(cx + 2, top + 2, fitT(c.err or "loading weather...", cw - 3), c.err and RED or GRAY, PANEL)
+    end
+  end
+  -- row 2: players | minecraft + devices
+  local y2a = top + rowH + 1
+  local stH = 6
+  local y2b = bottom - stH - 1
+  local hw = math.floor((x2 - x1 + 1 - gap) / 2)
+  local px1, px2 = x1, x1 + hw - 1
+  local n = P.players and #P.players or 0
+  card(px1, y2a, px2, y2b, "PLAYERS ONLINE" .. (P.players and (" (" .. n .. ")") or ""), LBLUE)
+  if not P.hasDet then
+    text(px1 + 2, y2a + 2, "Place a Player Detector", LGRAY, PANEL)
+    text(px1 + 2, y2a + 3, "on this computer's network", GRAY, PANEL)
+  elseif n == 0 then
+    text(px1 + 2, y2a + 2, "nobody online", GRAY, PANEL)
+  else
+    local rows = y2b - y2a - 1
+    local colsN = (n > rows and hw >= 36) and 2 or 1
+    local colW = math.floor((hw - 2) / colsN)
+    local shownN = math.min(n, rows * colsN)
+    if shownN < n then shownN = shownN - 1 end
+    for i = 1, shownN do
+      local name = P.players[i]
+      local c = math.floor((i - 1) / rows)
+      local yy = y2a + 1 + ((i - 1) % rows) + 1 - 1
+      local xx = px1 + 2 + c * colW
+      local near = P.near[name]
+      setCell(xx, yy + 1 - 1, G_DOT, near and LIME or LBLUE, PANEL)
+      text(xx + 2, yy, fitT(name, colW - (near and 8 or 3)), WHITE, PANEL)
+      if near then text(xx + colW - 6, yy, "NEAR", LIME, PANEL) end
+    end
+    if shownN < n then text(px1 + 2, y2b, "+" .. (n - shownN) .. " more", GRAY, PANEL) end
+  end
+  local mx1, mx2 = px2 + 1 + gap, x2
+  card(mx1, y2a, mx2, y2b, "MINECRAFT", LIME)
+  local gt, gd = gameClock()
+  local y = y2a + 2
+  text(mx1 + 2, y, "Day " .. gd .. "   " .. gt, WHITE, PANEL); y = y + 1
+  local wxs, wcol = "add an Environment Detector", GRAY
+  if P.hasEnv then
+    if P.thunder then wxs, wcol = "Thunderstorm", YELLOW elseif P.rain then wxs, wcol = "Raining", LBLUE else wxs, wcol = "Clear", WHITE end
+  end
+  text(mx1 + 2, y, "Weather ", LGRAY, PANEL); text(mx1 + 10, y, fitT(wxs, mx2 - mx1 - 11), wcol, PANEL); y = y + 1
+  local ts, tcol = tpsLook(P.tps)
+  text(mx1 + 2, y, "TPS     ", LGRAY, PANEL); text(mx1 + 10, y, ts, tcol, PANEL); y = y + 2
+  text(mx1 + 1, y, "DEVICES", YELLOW, PANEL); y = y + 1
+  local devs = { { "Jukebox", true }, { "Storage", storageOK() }, { "Crafter", storageOK() and P.storage.crafter == true },
+                 { "Listening zone", online("zone") }, { "Remote screen", online("remote") } }
+  local dw = math.floor((mx2 - mx1 - 2) / 2)
+  for i, d in ipairs(devs) do
+    local xx = mx1 + 2 + ((i - 1) % 2) * dw
+    local yy = y + math.floor((i - 1) / 2)
+    if yy <= y2b then
+      setCell(xx, yy, G_DOT, d[2] and LIME or RED, PANEL)
+      text(xx + 2, yy, fitT(d[1], dw - 3), d[2] and WHITE or GRAY, PANEL)
+    end
+  end
+  -- row 3: storage
+  local sy1 = bottom - stH + 1
+  card(x1, sy1, x2, bottom, "STORAGE", MAGENTA)
+  local st = storageOK() and P.storage or nil
+  if not st then
+    text(x1 + 2, sy1 + 2, "waiting for the storage computer...", GRAY, PANEL)
+  else
+    local pct = (st.slots or 0) > 0 and st.used / st.slots or 0
+    local bw = x2 - x1 - 24
+    local f = math.floor(pct * bw + 0.5)
+    for i = 1, bw do setCell(x1 + 1 + i, sy1 + 1, " ", WHITE, i <= f and (pct > 0.9 and RED or (pct > 0.75 and YELLOW or LIME)) or GRAY) end
+    text(x1 + bw + 4, sy1 + 1, math.floor(pct * 100 + 0.5) .. "% full", WHITE, PANEL)
+    text(x1 + 2, sy1 + 2, commasN(st.total) .. " items   " .. commasN(st.types) .. " kinds   " .. commasN(st.used) .. "/" .. commasN(st.slots) .. " slots", LGRAY, PANEL)
+    text(x1 + 2, sy1 + 3, fitT(st.busy or st.msg or "", x2 - x1 - 3), st.busy and YELLOW or WHITE, PANEL)
+    local low = type(st.low) == "table" and st.low or {}
+    if #low == 0 then text(x1 + 2, sy1 + 4, "Low stock: none", GRAY, PANEL)
+    else
+      local parts = {}
+      for _, a in ipairs(low) do parts[#parts + 1] = a.name .. " " .. commasN(a.have) .. "/" .. commasN(a.limit) end
+      text(x1 + 2, sy1 + 4, "Low stock:", RED, PANEL)
+      text(x1 + 13, sy1 + 4, fitT(table.concat(parts, "   "), x2 - x1 - 14), WHITE, PANEL)
+    end
+  end
+  -- what's playing, just above the progress bar
+  local np = S.song and (G_RIGHT .. " " .. S.song.title .. "  -  " .. S.song.artist) or "Nothing playing"
+  text(L.cx - math.floor(math.min(#np, L.rw - 4) / 2), L.py - 1, fitT(np, L.rw - 4), S.song and WHITE or GRAY)
+end
+end
+
 local function termStatus()
   term.setBackgroundColour(colors.black)
   term.clear(); term.setCursorPos(1, 1)
@@ -1228,188 +1412,9 @@ end
 -- ---------------------------------------------------------- CONTROL panel (base / server status)
 -- P is filled from: the storage's status broadcast, a Player Detector, an Environment Detector
 -- (both optional, on this computer's network), a tick-rate check, and the weather above.
-local P = { storage = nil, storageAt = -1e9, seen = {}, players = nil, near = {}, hasDet = false, hasEnv = false, tps = nil }
-local NEAR_RANGE = 64                       -- "near base" = within this many blocks of the Player Detector
-local function fitT(s, w) s = tostring(s or ""); if w < 1 then return "" end if #s > w then return s:sub(1, math.max(1, w - 1)) .. "." end return s end
-local function commasN(n) local s = tostring(math.floor(n or 0)); local r = s:reverse():gsub("(%d%d%d)", "%1,"):reverse(); return (r:gsub("^,", "")) end
-local function pollWorld()
-  local det = peripheral.find("player_detector") or peripheral.find("playerDetector")
-  P.hasDet = det ~= nil
-  if det then
-    local ok, list = pcall(det.getOnlinePlayers)
-    if ok and type(list) == "table" then
-      local names = {}
-      for _, n in pairs(list) do if type(n) == "string" then names[#names + 1] = n end end
-      table.sort(names, function(a, b) return a:lower() < b:lower() end)
-      P.players = names
-    end
-    local ok2, near = pcall(det.getPlayersInRange, NEAR_RANGE)
-    P.near = {}
-    if ok2 and type(near) == "table" then for _, n in pairs(near) do P.near[n] = true end end
-  else
-    P.players, P.near = nil, {}
-  end
-  local env = peripheral.find("environment_detector") or peripheral.find("environmentDetector")
-  P.hasEnv = env ~= nil
-  if env then
-    local ok, r = pcall(env.isRaining); P.rain = ok and r or nil
-    local ok2, th = pcall(env.isThunder); P.thunder = ok2 and th or nil
-  else P.rain, P.thunder = nil, nil end
-end
--- server speed: a 5 second timer takes longer than 5 real seconds when the server lags
-local function tpsLoop()
-  while true do
-    local t0 = now()
-    sleep(5)
-    local dt = now() - t0
-    if dt > 0 then P.tps = math.min(20, 100 / dt) end
-  end
-end
-local function gameClock()
-  local tm = os.time()
-  local h = math.floor(tm); local m = math.floor((tm - h) * 60)
-  local h12 = h % 12; if h12 == 0 then h12 = 12 end
-  return string.format("%d:%02d %s", h12, m, h < 12 and "AM" or "PM"), os.day()
-end
-local function online(who) return now() - (P.seen[who] or -1e9) < 30 end
-local function storageOK() return P.storage ~= nil and now() - P.storageAt < 20 end
--- everything the remote and pockets need to draw their CONTROL view
-local function panelData()
-  local mt = mountainTime()
-  local wx = {}
-  for i, c in ipairs(CITIES) do wx[i] = { name = c.short, ok = c.ok, temp = c.temp, code = c.code, day = c.day, hi = c.hi, lo = c.lo } end
-  local gt, gd = gameClock()
-  local players
-  if P.players then
-    players = {}
-    for i, n in ipairs(P.players) do players[i] = { name = n, near = P.near[n] == true } end
-  end
-  return { type = "panel", clock = mt.h12 .. ":" .. string.format("%02d", mt.min) .. " " .. mt.ampm, tz = mt.dst and "MDT" or "MST",
-    date = DAYS[mt.wday + 1]:sub(1, 3) .. ", " .. MONTHS[mt.month] .. " " .. mt.day, wx = wx,
-    players = players, hasDet = P.hasDet, game = { time = gt, day = gd, rain = P.rain, thunder = P.thunder, hasEnv = P.hasEnv },
-    tps = P.tps, storage = storageOK() and P.storage or nil,
-    dev = { storage = storageOK(), crafter = storageOK() and P.storage.crafter == true, zone = online("zone"), remote = online("remote") } }
-end
-local function tpsLook(tps)
-  if not tps then return "checking...", GRAY end
-  if tps >= 18 then return string.format("%.1f  smooth", tps), LIME end
-  if tps >= 12 then return string.format("%.1f  a bit laggy", tps), YELLOW end
-  return string.format("%.1f  very laggy", tps), RED
-end
-local function card(x1, y1, x2, y2, title, col)
-  fill(x1, y1, x2, y2, PANEL)
-  text(x1 + 1, y1, title, col, PANEL)
-end
-local function drawControl(t)
-  local x1, x2 = L.rx1 + 1, W - 1
-  local top, bottom = 5, L.py - 2
-  local gap = 2
-  -- row 1: real time + the two towns
-  local cw = math.floor((x2 - x1 + 1 - gap * 2) / 3)
-  local rowH = 6
-  local cx = x1
-  local mt = mountainTime()
-  card(cx, top, cx + cw - 1, top + rowH - 1, "MOUNTAIN TIME", YELLOW)
-  text(cx + 2, top + 2, mt.h12 .. ":" .. string.format("%02d", mt.min) .. ":" .. string.format("%02d", mt.sec) .. " " .. mt.ampm, WHITE, PANEL)
-  text(cx + 2, top + 3, mt.dst and "MDT (daylight time)" or "MST (standard time)", GRAY, PANEL)
-  text(cx + 2, top + 4, DAYS[mt.wday + 1] .. ", " .. MONTHS[mt.month] .. " " .. mt.day, LGRAY, PANEL)
-  for i, c in ipairs(CITIES) do
-    cx = x1 + i * (cw + gap)
-    card(cx, top, cx + cw - 1, top + rowH - 1, c.name, c.col)
-    if c.ok then
-      local label, icon, icol = wxLook(c.code, c.day)
-      text(cx + 2, top + 2, icon, icol, PANEL)
-      text(cx + 4, top + 2, math.floor(c.temp + 0.5) .. DEG .. "F", WHITE, PANEL)
-      text(cx + 4, top + 3, fitT(label, cw - 5), LGRAY, PANEL)
-      if c.hi and c.lo then text(cx + 2, top + 4, "High " .. math.floor(c.hi + 0.5) .. DEG .. "  Low " .. math.floor(c.lo + 0.5) .. DEG, GRAY, PANEL) end
-    else
-      text(cx + 2, top + 2, fitT(c.err or "loading weather...", cw - 3), c.err and RED or GRAY, PANEL)
-    end
-  end
-  -- row 2: players | minecraft + devices
-  local y2a = top + rowH + 1
-  local stH = 6
-  local y2b = bottom - stH - 1
-  local hw = math.floor((x2 - x1 + 1 - gap) / 2)
-  local px1, px2 = x1, x1 + hw - 1
-  local n = P.players and #P.players or 0
-  card(px1, y2a, px2, y2b, "PLAYERS ONLINE" .. (P.players and (" (" .. n .. ")") or ""), LBLUE)
-  if not P.hasDet then
-    text(px1 + 2, y2a + 2, "Place a Player Detector", LGRAY, PANEL)
-    text(px1 + 2, y2a + 3, "on this computer's network", GRAY, PANEL)
-  elseif n == 0 then
-    text(px1 + 2, y2a + 2, "nobody online", GRAY, PANEL)
-  else
-    local rows = y2b - y2a - 1
-    local colsN = (n > rows and hw >= 36) and 2 or 1
-    local colW = math.floor((hw - 2) / colsN)
-    local shownN = math.min(n, rows * colsN)
-    if shownN < n then shownN = shownN - 1 end
-    for i = 1, shownN do
-      local name = P.players[i]
-      local c = math.floor((i - 1) / rows)
-      local yy = y2a + 1 + ((i - 1) % rows) + 1 - 1
-      local xx = px1 + 2 + c * colW
-      local near = P.near[name]
-      setCell(xx, yy + 1 - 1, G_DOT, near and LIME or LBLUE, PANEL)
-      text(xx + 2, yy, fitT(name, colW - (near and 8 or 3)), WHITE, PANEL)
-      if near then text(xx + colW - 6, yy, "NEAR", LIME, PANEL) end
-    end
-    if shownN < n then text(px1 + 2, y2b, "+" .. (n - shownN) .. " more", GRAY, PANEL) end
-  end
-  local mx1, mx2 = px2 + 1 + gap, x2
-  card(mx1, y2a, mx2, y2b, "MINECRAFT", LIME)
-  local gt, gd = gameClock()
-  local y = y2a + 2
-  text(mx1 + 2, y, "Day " .. gd .. "   " .. gt, WHITE, PANEL); y = y + 1
-  local wxs, wcol = "add an Environment Detector", GRAY
-  if P.hasEnv then
-    if P.thunder then wxs, wcol = "Thunderstorm", YELLOW elseif P.rain then wxs, wcol = "Raining", LBLUE else wxs, wcol = "Clear", WHITE end
-  end
-  text(mx1 + 2, y, "Weather ", LGRAY, PANEL); text(mx1 + 10, y, fitT(wxs, mx2 - mx1 - 11), wcol, PANEL); y = y + 1
-  local ts, tcol = tpsLook(P.tps)
-  text(mx1 + 2, y, "TPS     ", LGRAY, PANEL); text(mx1 + 10, y, ts, tcol, PANEL); y = y + 2
-  text(mx1 + 1, y, "DEVICES", YELLOW, PANEL); y = y + 1
-  local devs = { { "Jukebox", true }, { "Storage", storageOK() }, { "Crafter", storageOK() and P.storage.crafter == true },
-                 { "Listening zone", online("zone") }, { "Remote screen", online("remote") } }
-  local dw = math.floor((mx2 - mx1 - 2) / 2)
-  for i, d in ipairs(devs) do
-    local xx = mx1 + 2 + ((i - 1) % 2) * dw
-    local yy = y + math.floor((i - 1) / 2)
-    if yy <= y2b then
-      setCell(xx, yy, G_DOT, d[2] and LIME or RED, PANEL)
-      text(xx + 2, yy, fitT(d[1], dw - 3), d[2] and WHITE or GRAY, PANEL)
-    end
-  end
-  -- row 3: storage
-  local sy1 = bottom - stH + 1
-  card(x1, sy1, x2, bottom, "STORAGE", MAGENTA)
-  local st = storageOK() and P.storage or nil
-  if not st then
-    text(x1 + 2, sy1 + 2, "waiting for the storage computer...", GRAY, PANEL)
-  else
-    local pct = (st.slots or 0) > 0 and st.used / st.slots or 0
-    local bw = x2 - x1 - 24
-    local f = math.floor(pct * bw + 0.5)
-    for i = 1, bw do setCell(x1 + 1 + i, sy1 + 1, " ", WHITE, i <= f and (pct > 0.9 and RED or (pct > 0.75 and YELLOW or LIME)) or GRAY) end
-    text(x1 + bw + 4, sy1 + 1, math.floor(pct * 100 + 0.5) .. "% full", WHITE, PANEL)
-    text(x1 + 2, sy1 + 2, commasN(st.total) .. " items   " .. commasN(st.types) .. " kinds   " .. commasN(st.used) .. "/" .. commasN(st.slots) .. " slots", LGRAY, PANEL)
-    text(x1 + 2, sy1 + 3, fitT(st.busy or st.msg or "", x2 - x1 - 3), st.busy and YELLOW or WHITE, PANEL)
-    local low = type(st.low) == "table" and st.low or {}
-    if #low == 0 then text(x1 + 2, sy1 + 4, "Low stock: none", GRAY, PANEL)
-    else
-      local parts = {}
-      for _, a in ipairs(low) do parts[#parts + 1] = a.name .. " " .. commasN(a.have) .. "/" .. commasN(a.limit) end
-      text(x1 + 2, sy1 + 4, "Low stock:", RED, PANEL)
-      text(x1 + 13, sy1 + 4, fitT(table.concat(parts, "   "), x2 - x1 - 14), WHITE, PANEL)
-    end
-  end
-  -- what's playing, just above the progress bar
-  local np = S.song and (G_RIGHT .. " " .. S.song.title .. "  -  " .. S.song.artist) or "Nothing playing"
-  text(L.cx - math.floor(math.min(#np, L.rw - 4) / 2), L.py - 1, fitT(np, L.rw - 4), S.song and WHITE or GRAY)
-end
+
 -- CONTROL / MUSIC switch, top-left of the right side
-local function screenButton()
+screenButton = function()
   local x1 = L.rx1 + 1
   local x2 = math.min(x1 + 10, L.tx1 - 2)
   if x2 - x1 < 6 then x2 = x1 + 8 end
