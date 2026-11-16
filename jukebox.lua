@@ -360,6 +360,7 @@ local function beginAt(sec)
   S.startByte = math.floor(sec * 6000)
   S.feedByte, S.startTime, S.pausePos = S.startByte, now(), sec
   S.gen = S.gen + 1
+  S.netDirty = true                     -- tell listening zones right away
   pcmRing = {}
   stopSpeakers(); wake()
 end
@@ -1327,6 +1328,9 @@ local function sendState()
     fromQueue = S.fromQueue, upNext = S.upNext,
     title = S.song and S.song.title, artist = S.song and S.song.artist,
     pos = position(), dur = duration(), paused = S.paused, loading = S.loading, err = S.err,
+    -- for listening zones: which file is playing and the wall-clock time its 0:00 would have been
+    file = S.song and S.song.file, track = S.trackId, power = UI.power,
+    anchor = (S.data and not S.paused) and (S.startTime - S.startByte / 6000) or nil, sent = now(),
   }, PROTO)
 end
 
@@ -1395,7 +1399,7 @@ local function renderLoop()
       if frames % 300 == 0 then termStatus() end            -- refresh the computer's own screen every ~30s
       last = t
       frames = frames + 1
-      if frames % 5 == 0 then sendState() end
+      if frames % 5 == 0 or S.netDirty then S.netDirty = false; sendState() end
       timer = os.startTimer(CFG.frame)
     end
   end
