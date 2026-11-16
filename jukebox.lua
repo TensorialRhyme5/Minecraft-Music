@@ -890,7 +890,7 @@ do
   -- Friends get "WELCOME BACK"; anyone else gets "VISITOR". The base is a box between two corners
   -- (x, y, z). Until it's filled in, anyone within FALLBACK blocks of the Player Detector counts.
   WEL = {
-    BOX = nil,                        -- e.g. { { x = 100, y = 60, z = -40 }, { x = 160, y = 120, z = 20 } }
+    BOX = { { x = 135, y = 85, z = -1155 }, { x = 146, y = 110, z = -1138 } },   -- the base (corners 146 89 -1155 / 135 89 -1138)
     FALLBACK = 40,
     FRIENDS = { TensorialRhyme5 = "TEN", Haydog098 = "Haydog098" },
     AWAY = 60,                        -- seconds someone must be gone before they're welcomed again
