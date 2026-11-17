@@ -2113,7 +2113,10 @@ local function inputLoop()
     elseif ev == "monitor_touch" and monByName[a] then handleTouch(b, c); sendState()
     elseif ev == "rednet_message" and c == PROTO then handleRemote(b, a)
     elseif ev == "rednet_message" and c == "storagestat" and type(b) == "table" and b.type == "status" then
-      P.storage, P.storageAt = b, now()
+      -- stick with one storage computer (a second one, like the mine's, would make the card flip back and forth)
+      if not P.storageId or a == P.storageId or now() - (P.storageAt or 0) > 30 then
+        P.storage, P.storageAt, P.storageId = b, now(), a
+      end
     elseif (ev == "http_success" or ev == "http_failure") and wxResult(a, ev == "http_success" and b or nil, ev == "http_failure" and b or nil) then
       termStatus()                                            -- weather arrived: refresh the computer's screen
     elseif (ev == "monitor_resize" and monByName[a]) or ev == "peripheral" or ev == "peripheral_detach" then
