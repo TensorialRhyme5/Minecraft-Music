@@ -897,6 +897,11 @@ do
     SHOW = 10,                        -- seconds the message stays up                        -- seconds someone must be gone before they're welcomed again
     inside = {}, lastSeen = {}, queue = {}, showUntil = 0, cur = nil,
   }
+  -- friend lookup that ignores capital letters (usernames can be "haydog098" or "Haydog098")
+  function WEL.friend(n)
+    n = tostring(n):lower()
+    for k, v in pairs(WEL.FRIENDS) do if k:lower() == n then return v end end
+  end
   function WEL.poll()
     local det = peripheral.find("player_detector") or peripheral.find("playerDetector")
     if not det then return end
@@ -910,7 +915,7 @@ do
       if type(n) == "string" then
         here[n] = true
         if not WEL.inside[n] and t - (WEL.lastSeen[n] or -1e9) > WEL.AWAY and WEL.started then
-          WEL.queue[#WEL.queue + 1] = { name = n, friend = WEL.FRIENDS[n] ~= nil }
+          WEL.queue[#WEL.queue + 1] = { name = n, friend = WEL.friend(n) ~= nil }
         end
         WEL.lastSeen[n] = t
       end
@@ -979,7 +984,7 @@ do
     fill(x1 - 1, y1 - 1, x2 + 1, y2 + 1, col)
     fill(x1, y1, x2, y2, PANEL)
     local head = c.friend and "W E L C O M E   B A C K" or "V I S I T O R"
-    local name = c.friend and WEL.FRIENDS[c.name] or c.name
+    local name = c.friend and WEL.friend(c.name) or c.name
     local big = name:upper():gsub(".", "%0 "):sub(1, -2)
     local cx = math.floor((x1 + x2) / 2)
     text(cx - math.floor(#head / 2), y1 + 2, head, col, PANEL)
